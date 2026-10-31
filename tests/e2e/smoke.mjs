@@ -128,7 +128,7 @@ await shot('tree-picker');
 await check(await page.locator('.pick-row.on').filter({ hasText: 'Грядка с клубникой' }).isVisible(), 'клумба создана внутри зоны и выбрана');
 await page.locator('.crumb').click();
 await page.getByPlaceholder('Найти клумбу или зону').fill('клубн');
-await check((await page.locator('.pick-row').count()) === 1, 'поиск по дереву находит клумбу');
+await check((await page.locator('.place-browser .pick-row').count()) === 1, 'поиск по дереву находит клумбу');
 await page.keyboard.press('Escape');
 
 // Вид (ракурс) внутри зоны

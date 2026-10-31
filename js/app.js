@@ -11,6 +11,7 @@ import { moreView, hiddenView } from './views/more.js';
 import { seasonsHome, gridView, compareView } from './views/seasons.js';
 import { placeTaggingView } from './views/placeTagging.js';
 import { journalView } from './views/journal.js';
+import { indexAll } from './data/similarity.js';
 
 const routes = [
   { re: /^\/queue$/, view: queueView, tab: 'queue' },
@@ -147,6 +148,7 @@ async function start() {
 
   bus.addEventListener('import', (e) => {
     updateBanner(e.detail);
+    if (!e.detail.running) setTimeout(() => indexAll().catch(() => {}), 1000);
     if (!e.detail.running && currentRoute && ['queue', 'more', 'camera'].includes(currentRoute.tab) && !currentRoute.full) rerender();
     else refreshNav();
   });
@@ -156,6 +158,8 @@ async function start() {
     render();
   });
   await render();
+  // Отпечатки для подсказок считаются в фоне, когда приложение уже открылось
+  setTimeout(() => indexAll().catch(() => {}), 4000);
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     const hadController = !!navigator.serviceWorker.controller;

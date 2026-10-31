@@ -3,10 +3,11 @@ import { h, icon, photoImg, toast } from '../ui/dom.js';
 import { countPhotos, getSetting, setSetting, photosByStatus, unhidePhotos, deletedIds, forgetDeleted, deletePhotos } from '../data/store.js';
 import { importButtons } from '../ui/importButtons.js';
 import { backupCard } from '../ui/backupCard.js';
+import { assistantCard } from '../ui/assistantCard.js';
 import { formatNumber, formatBytes, formatDayShort, plural, PHOTO_FORMS } from '../lib/format.js';
 import { rerender } from '../app.js';
 
-export const APP_VERSION = '0.4.4';
+export const APP_VERSION = '0.5.0';
 
 async function checkUpdates() {
   const reg = await navigator.serviceWorker?.getRegistration?.();
@@ -43,6 +44,7 @@ export async function moreView() {
     h('p', { class: 'muted' }, 'Дубли распознаются автоматически, поэтому одну и ту же папку можно выбирать повторно — например, если импорт прервался.'),
     importButtons()));
   page.append(await backupCard());
+  page.append(await assistantCard());
 
   page.append(h('section', { class: 'card' },
     h('h2', { class: 'card-title' }, 'Фото'),

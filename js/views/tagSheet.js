@@ -6,6 +6,7 @@ import {
 import { centerOf, distanceMeters } from '../lib/geo.js';
 import { formatNumber, plural, PHOTO_FORMS } from '../lib/format.js';
 import { placeBrowser, placeField } from '../ui/placePicker.js';
+import { suggest } from '../data/similarity.js';
 
 const norm = (s) => (s || '').toLowerCase().replace(/ё/g, 'е').trim();
 
@@ -25,7 +26,7 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
     : [];
   let ctxPlace = ctxCandidates[0] || null;
   const n = photos.length;
-  const st = { mode: initialMode, query: '', picked: new Set(), creating: false, browser: startLevel ? { level: startLevel, query: '', creating: false } : {} };
+  const st = { mode: initialMode, query: '', picked: new Set(), creating: false, sugg: {}, browser: startLevel ? { level: startLevel, query: '', creating: false } : {} };
 
   /** Сорт «v:вид:сорт» → экземпляр в клумбе фото (существующий или новый). */
   const resolvePlants = async (keys) => {
@@ -53,8 +54,9 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
         h('button', { type: 'button', 'aria-pressed': String(st.mode === 'plant'), onClick: () => switchMode('plant') }, 'Растение'));
       root.append(seg);
 
+      loadSuggestions();
       if (st.mode === 'place') {
-        root.append(...placeNear(), placeBrowser({
+        root.append(...[suggestionSection(), ...placeNear()].filter(Boolean), placeBrowser({
           isSelected: (id) => st.picked.has(id), onSelect: toggle, recentIds: recentPlaces, gpsCenter: center, state: st.browser,
         }));
       } else if (st.creating) {
@@ -72,7 +74,7 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
       root.append(h('label', { class: 'search' }, icon('search', 18), search), lists);
       const drawLists = () => {
         clear(lists);
-        lists.append(...plantSections().filter(Boolean));
+        lists.append(...[st.query ? null : suggestionSection(), ...plantSections()].filter(Boolean));
         lists.append(h('button', { class: 'btn dashed block', type: 'button', onClick: () => { st.creating = true; draw(); } },
           icon('plus', 20), 'Создать новое растение'));
       };
@@ -120,6 +122,37 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
     };
 
     const section = (title, rows) => (rows.length ? h('div', { class: 'pick-section' }, h('h3', { class: 'eyebrow' }, title), rows) : null);
+
+    // ---------- подсказки «Похоже на…» ----------
+    const loadSuggestions = () => {
+      if (!photos.length || st.sugg[st.mode] !== undefined) return;
+      const mode = st.mode;
+      st.sugg[mode] = null; // считается
+      getSetting('suggestions').then((on) => (on === false ? [] : suggest(photos, mode, { ctxPlace })))
+        .then((r) => { st.sugg[mode] = r; if (st.mode === mode && !st.creating) draw(); })
+        .catch(() => { st.sugg[mode] = []; });
+    };
+    const confidence = (share) => (share >= 0.5 ? 'скорее всего' : 'возможно');
+    const suggestionSection = () => {
+      const list = st.sugg[st.mode];
+      if (list === null) return h('p', { class: 'muted small sugg-wait' }, 'Ищу похожие фото…');
+      if (!list?.length) return null;
+      const rows = list.map((sg) => {
+        const sub = `${confidence(sg.share)} · похожих фото: ${sg.support}`;
+        if (st.mode === 'place') {
+          const p = catalog.places.get(sg.key);
+          return p ? row(p.id, p.name, [p.kind === 'view' ? 'вид' : parentPath(p.id), sub].filter(Boolean).join(' · ')) : null;
+        }
+        if (sg.key.startsWith('v:')) {
+          const [, sp, cv] = sg.key.split(':');
+          const sample = [...catalog.plants.values()].find((p) => p.speciesId === sp && (p.cultivarId || '') === cv);
+          return sample ? row(sg.key, varietyName(sample), `${sub} · добавится в «${catalog.places.get(ctxPlace)?.name}»`) : null;
+        }
+        const p = catalog.plants.get(sg.key);
+        return p ? row(p.id, varietyName(p), `${sub} · ${catalog.places.get(p.placeId)?.name || ''}`) : null;
+      }).filter(Boolean);
+      return rows.length ? h('div', { class: 'pick-section sugg' }, h('h3', { class: 'eyebrow' }, icon('eye', 14), ' Похоже на'), rows) : null;
+    };
 
     const placeNear = () => {
       if (!center) return [];

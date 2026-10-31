@@ -1,7 +1,7 @@
 // Обёртка над IndexedDB. Всё хранится на устройстве.
 
 const DB_NAME = 'plant-diary';
-const VERSION = 1;
+const VERSION = 2;
 let dbPromise = null;
 
 export const STORES = {
@@ -13,26 +13,36 @@ export const STORES = {
   plants: 'plants',     // {id, speciesId, cultivarId, placeId, plantedAt, status, prevPlantId, coverPhotoId, notes}
   entries: 'entries',   // записи дневника (этап 3)
   meta: 'meta',         // настройки и служебное
+  features: 'features', // отпечатки фото для подсказок: ключ — id фото → {v, f: Float32Array}
 };
 
 export function openDB() {
   if (!dbPromise) {
     dbPromise = new Promise((resolve, reject) => {
       const r = indexedDB.open(DB_NAME, VERSION);
-      r.onupgradeneeded = () => {
+      r.onupgradeneeded = (ev) => {
         const db = r.result;
-        const photos = db.createObjectStore(STORES.photos, { keyPath: 'id' });
-        photos.createIndex('takenAt', 'takenAt');
-        photos.createIndex('status', 'status');
-        photos.createIndex('placeIds', 'placeIds', { multiEntry: true });
-        photos.createIndex('plantIds', 'plantIds', { multiEntry: true });
-        db.createObjectStore(STORES.images);
-        for (const s of ['species', 'cultivars', 'places', 'plants', 'entries']) {
-          db.createObjectStore(STORES[s], { keyPath: 'id' });
+        // Обновление по шагам: данные прежних версий сохраняются
+        if (ev.oldVersion < 1) {
+          const photos = db.createObjectStore(STORES.photos, { keyPath: 'id' });
+          photos.createIndex('takenAt', 'takenAt');
+          photos.createIndex('status', 'status');
+          photos.createIndex('placeIds', 'placeIds', { multiEntry: true });
+          photos.createIndex('plantIds', 'plantIds', { multiEntry: true });
+          db.createObjectStore(STORES.images);
+          for (const s of ['species', 'cultivars', 'places', 'plants', 'entries']) {
+            db.createObjectStore(STORES[s], { keyPath: 'id' });
+          }
+          db.createObjectStore(STORES.meta);
         }
-        db.createObjectStore(STORES.meta);
+        if (ev.oldVersion < 2) db.createObjectStore(STORES.features);
       };
-      r.onsuccess = () => resolve(r.result);
+      r.onsuccess = () => {
+        const db = r.result;
+        // Если открылась новая версия приложения в другом окне — уступить ей базу
+        db.onversionchange = () => { db.close(); location.reload(); };
+        resolve(db);
+      };
       r.onerror = () => reject(r.error);
       r.onblocked = () => reject(new Error('База занята другой вкладкой приложения. Закройте её и обновите страницу.'));
     });
