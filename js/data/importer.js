@@ -17,6 +17,7 @@ export const importState = {
   failed: [], // {name, reason}
   skipped: 0, // не изображения
   deletedBefore: 0, // удалены из приложения раньше
+  outOfRange: 0, // не попали в выбранный период
   startedAt: 0,
   finishedAt: 0,
 };
@@ -39,16 +40,17 @@ export function isImageFile(f) {
 /**
  * Добавить файлы в очередь импорта. Можно вызывать, пока идёт предыдущий импорт.
  * @param opts.tag — сразу отметить фото: {placeId, plantIds} (съёмка из приложения)
+ * @param opts.range — импортировать только снятые в период {from, to} (мс, to — не включая)
  */
-export function importFiles(fileList, { tag = null } = {}) {
+export function importFiles(fileList, { tag = null, range = null } = {}) {
   const files = [...fileList];
   const images = files.filter(isImageFile);
   if (!importState.running) {
-    Object.assign(importState, { total: 0, processed: 0, added: 0, duplicates: 0, noDate: 0, failed: [], skipped: 0, deletedBefore: 0, startedAt: Date.now(), finishedAt: 0 });
+    Object.assign(importState, { total: 0, processed: 0, added: 0, duplicates: 0, noDate: 0, failed: [], skipped: 0, deletedBefore: 0, outOfRange: 0, startedAt: Date.now(), finishedAt: 0 });
   }
   importState.skipped += files.length - images.length;
   importState.total += images.length;
-  queue.push(...images.map((file) => ({ file, tag })));
+  queue.push(...images.map((file) => ({ file, tag, range })));
   if (!importState.running) run();
   else progress(true);
 }
@@ -60,9 +62,9 @@ async function run() {
   const quality = (await getSetting('fullQuality')) === 'economy' ? { size: 1200, q: 0.78 } : { size: FULL_SIZE, q: 0.82 };
   const worker = async () => {
     while (queue.length) {
-      const { file, tag } = queue.shift();
+      const { file, tag, range } = queue.shift();
       try {
-        const id = await importOne(file, quality, deleted);
+        const id = await importOne(file, quality, deleted, range);
         if (id && tag) await tagPhotos([id], tag);
       } catch (e) {
         importState.failed.push({ name: file.name, reason: describeError(file, e) });
@@ -90,7 +92,19 @@ async function hashFile(file) {
   return [...new Uint8Array(digest)].slice(0, 16).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function importOne(file, quality, deleted) {
+// Файл, изменённый раньше начала периода, не мог быть снят в этот период (копия всегда новее снимка).
+const DAY = 24 * 3600 * 1000;
+
+async function importOne(file, quality, deleted, range = null) {
+  let head = null;
+  let exif = null;
+  if (range) {
+    if (file.lastModified && file.lastModified < range.from - DAY) { importState.outOfRange++; return null; }
+    head = await file.slice(0, 256 * 1024).arrayBuffer();
+    exif = parseExif(head);
+    const t = exif.takenAt || file.lastModified;
+    if (t && (t < range.from || t >= range.to)) { importState.outOfRange++; return null; }
+  }
   const id = await hashFile(file);
   if (deleted.has(id)) {
     importState.deletedBefore++;
@@ -100,8 +114,10 @@ async function importOne(file, quality, deleted) {
     importState.duplicates++;
     return id;
   }
-  const head = await file.slice(0, 256 * 1024).arrayBuffer();
-  const exif = parseExif(head);
+  if (!exif) {
+    head = await file.slice(0, 256 * 1024).arrayBuffer();
+    exif = parseExif(head);
+  }
   let takenAt = exif.takenAt;
   const dateApprox = !takenAt;
   if (!takenAt) {

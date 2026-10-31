@@ -118,6 +118,7 @@ function updateBanner(st) {
     banner.className = 'done';
     const parts = [`добавлено ${formatNumber(st.added)}`];
     if (st.duplicates) parts.push(`уже были ${formatNumber(st.duplicates)}`);
+    if (st.outOfRange) parts.push(`вне периода ${formatNumber(st.outOfRange)}`);
     if (st.deletedBefore) parts.push(`удалены раньше ${formatNumber(st.deletedBefore)}`);
     if (st.noDate) parts.push(`без даты ${formatNumber(st.noDate)}`);
     if (st.failed.length) parts.push(`не прочитано ${formatNumber(st.failed.length)}`);

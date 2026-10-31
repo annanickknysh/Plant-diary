@@ -427,3 +427,7 @@ body.fullscreen-route #view { padding-bottom: 0; }
 .pick-line { display: flex; align-items: center; gap: 4px; }
 .pick-line .pick-row { flex: 1; min-width: 0; }
 .list-picker .btn.dashed { margin-top: 12px; }
+
+/* Импорт папки: выбор периода */
+.date-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.range-sheet .chips-row { margin: 4px 0 8px; }
