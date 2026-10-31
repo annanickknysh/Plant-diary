@@ -21,14 +21,16 @@ function plantsIn(id) {
  * @param opts.recentIds — недавние места
  * @param opts.gpsCenter — координаты фото, чтобы предложить запомнить точку новой клумбы
  * @param opts.excludeId — не показывать это место и его вложенные (при выборе родителя)
+ * @param opts.noViews — скрыть виды (для растений и выбора родителя)
  */
-export function placeBrowser({ isSelected = () => false, onSelect, startLevel = null, recentIds = [], gpsCenter = null, excludeId = null, state = null }) {
+export function placeBrowser({ isSelected = () => false, onSelect, startLevel = null, recentIds = [], gpsCenter = null, excludeId = null, noViews = false, state = null }) {
   // Состояние можно передать снаружи, чтобы зона и поиск не сбрасывались при перерисовке
   const st = state || {};
   if (!('level' in st)) Object.assign(st, { level: startLevel && catalog.places.has(startLevel) ? startLevel : null, query: '', creating: false });
   if (st.level && !catalog.places.has(st.level)) st.level = null;
   const root = h('div', { class: 'place-browser' });
-  const excluded = (id) => excludeId && (id === excludeId || placePath(id).startsWith(`${placePath(excludeId)} › `));
+  const excluded = (id) => (noViews && catalog.places.get(id)?.kind === 'view')
+    || (excludeId && (id === excludeId || placePath(id).startsWith(`${placePath(excludeId)} › `)));
 
   const search = h('input', { type: 'search', placeholder: 'Найти клумбу или зону', 'aria-label': 'Поиск места', autocomplete: 'off' });
   search.value = st.query;
@@ -39,11 +41,13 @@ export function placeBrowser({ isSelected = () => false, onSelect, startLevel = 
   const row = (p, sub) => {
     const on = isSelected(p.id);
     const kids = childrenOf(p.id).filter((c) => !excluded(c.id));
-    const pick = h('button', { class: `pick-row${on ? ' on' : ''}`, type: 'button', 'aria-pressed': String(on), onClick: () => onSelect(p.id) },
-      h('span', { class: 'pick-text' }, h('span', { class: 'pick-title' }, p.name), sub ? h('span', { class: 'pick-sub' }, sub) : null),
+    const view = p.kind === 'view';
+    const pick = h('button', { class: `pick-row${on ? ' on' : ''}${view ? ' view' : ''}`, type: 'button', 'aria-pressed': String(on), onClick: () => onSelect(p.id) },
+      h('span', { class: 'pick-text' }, h('span', { class: 'pick-title' }, view ? icon('eye', 18) : null, p.name),
+        h('span', { class: 'pick-sub' }, [view ? 'вид' : null, sub].filter(Boolean).join(' · ') || null)),
       on ? icon('check', 22) : null);
     // Верхний уровень — обычно зоны: их можно открыть, даже если внутри пока пусто
-    if (!kids.length && p.parentId) return pick;
+    if (view || (!kids.length && p.parentId)) return pick;
     const n = kids.length;
     return h('div', { class: 'pick-split' }, pick,
       h('button', { class: 'drill', type: 'button', 'aria-label': `Открыть «${p.name}»${n ? `: ${n} внутри` : ''}`, onClick: () => { st.level = p.id; st.query = ''; search.value = ''; drawBody(); } },
@@ -52,9 +56,12 @@ export function placeBrowser({ isSelected = () => false, onSelect, startLevel = 
 
   const subFor = (p) => {
     const parts = [];
-    const kids = childrenOf(p.id).length;
+    const all = childrenOf(p.id);
+    const views = all.filter((c) => c.kind === 'view').length;
+    const kids = all.length - views;
     const plants = plantsIn(p.id);
     if (kids) parts.push(`мест внутри: ${kids}`);
+    if (views) parts.push(`видов: ${views}`);
     if (plants) parts.push(`растений: ${plants}`);
     return parts.join(' · ');
   };
@@ -97,16 +104,23 @@ export function placeBrowser({ isSelected = () => false, onSelect, startLevel = 
 
   const createBlock = (prefill) => {
     const parent = st.level ? catalog.places.get(st.level) : null;
-    const label = parent ? `Новое место в «${parent.name}»` : 'Новая зона или клумба';
+    const bedLabel = parent ? `Новая клумба в «${parent.name}»` : 'Новая зона или клумба';
+    const viewLabel = parent ? `Новый вид в «${parent.name}»` : 'Новый вид';
     if (!st.creating) {
-      return h('button', { class: 'btn dashed block', type: 'button', onClick: () => { st.creating = true; st.prefill = prefill; drawBody(); } }, icon('plus', 20), label);
+      const start = (kind) => () => { st.creating = kind; st.prefill = prefill; drawBody(); };
+      return h('div', { class: 'create-row' },
+        h('button', { class: 'btn dashed', type: 'button', onClick: start('bed') }, icon('plus', 20), bedLabel),
+        noViews ? null : h('button', { class: 'btn dashed', type: 'button', onClick: start('view') }, icon('eye', 20), viewLabel));
     }
-    const name = h('input', { type: 'text', autocomplete: 'off', placeholder: 'Название, например «Клумба у крыльца»' });
+    const isViewKind = st.creating === 'view';
+    const label = isViewKind ? viewLabel : bedLabel;
+    const name = h('input', { type: 'text', autocomplete: 'off', placeholder: isViewKind ? 'Например, «Вид на дом» или «Вид дорожки»' : 'Название, например «Клумба у крыльца»' });
     name.value = st.prefill || '';
     const gps = gpsCenter ? h('input', { type: 'checkbox', checked: true }) : null;
     const err = h('p', { class: 'form-error', role: 'alert' });
     const form = h('form', { class: 'form create-inline' },
       h('label', { class: 'field' }, h('span', null, label), name),
+      isViewKind ? h('p', { class: 'muted small' }, 'Вид — это ракурс, который вы снимаете из года в год. Растения к нему не привязываются.') : null,
       gps ? h('label', { class: 'check' }, gps, h('span', null, 'Запомнить точку GPS из этих фото — для подсказок')) : null,
       err,
       h('div', { class: 'row-buttons' },
@@ -115,7 +129,7 @@ export function placeBrowser({ isSelected = () => false, onSelect, startLevel = 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (!name.value.trim()) { err.textContent = 'Введите название.'; return; }
-      const p = await createPlace({ name: name.value, parentId: st.level, lat: gps?.checked ? gpsCenter.lat : null, lon: gps?.checked ? gpsCenter.lon : null });
+      const p = await createPlace({ name: name.value, parentId: st.level, kind: isViewKind ? 'view' : 'bed', lat: gps?.checked ? gpsCenter.lat : null, lon: gps?.checked ? gpsCenter.lon : null });
       st.creating = false;
       st.query = '';
       search.value = '';
@@ -131,7 +145,7 @@ export function placeBrowser({ isSelected = () => false, onSelect, startLevel = 
 }
 
 /** Открыть выбор места в отдельной панели. onPick(id) вызывается после выбора. */
-export async function openPlacePicker({ value = null, title = 'Где растёт', onPick, excludeId = null, allowNone = false }) {
+export async function openPlacePicker({ value = null, title = 'Где растёт', onPick, excludeId = null, allowNone = false, noViews = false }) {
   const recentIds = await getSetting('recentPlaces');
   openSheet((close) => {
     const wrap = h('div', { class: 'tag-sheet' },
@@ -147,13 +161,14 @@ export async function openPlacePicker({ value = null, title = 'Где растё
       startLevel: value ? catalog.places.get(value)?.parentId || null : null,
       recentIds,
       excludeId,
+      noViews,
     }));
     return wrap;
   }, { label: title, tall: true });
 }
 
 /** Поле формы «место»: кнопка с выбранным путём, открывает дерево. */
-export function placeField({ value = null, placeholder = 'Выберите клумбу', title, excludeId = null, allowNone = false, onChange }) {
+export function placeField({ value = null, placeholder = 'Выберите клумбу', title, excludeId = null, allowNone = false, noViews = true, onChange }) {
   let cur = value;
   const text = h('span', { class: 'place-field-text' });
   const btn = h('button', { class: 'place-field', type: 'button' }, text, icon('chevron', 18));
@@ -162,7 +177,7 @@ export function placeField({ value = null, placeholder = 'Выберите кл�
     btn.classList.toggle('empty', !cur && !allowNone);
   };
   btn.addEventListener('click', () => openPlacePicker({
-    value: cur, title, excludeId, allowNone,
+    value: cur, title, excludeId, allowNone, noViews,
     onPick: (id) => { cur = id; draw(); onChange?.(id); },
   }));
   draw();

@@ -5,7 +5,7 @@ import { importButtons } from '../ui/importButtons.js';
 import { formatNumber, formatBytes, formatDayShort, plural, PHOTO_FORMS } from '../lib/format.js';
 import { rerender } from '../app.js';
 
-export const APP_VERSION = '0.2.1';
+export const APP_VERSION = '0.3.0';
 
 export async function moreView() {
   const [counts, gap, quality, estimate, persisted] = await Promise.all([

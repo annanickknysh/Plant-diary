@@ -30,7 +30,7 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
         h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Закрыть', onClick: close }, icon('close'))));
 
       const seg = h('div', { class: 'segmented', role: 'group', 'aria-label': 'Что отмечаем' },
-        h('button', { type: 'button', 'aria-pressed': String(st.mode === 'place'), onClick: () => switchMode('place') }, 'Клумба'),
+        h('button', { type: 'button', 'aria-pressed': String(st.mode === 'place'), onClick: () => switchMode('place') }, 'Клумба или вид'),
         h('button', { type: 'button', 'aria-pressed': String(st.mode === 'plant'), onClick: () => switchMode('plant') }, 'Растение'));
       root.append(seg);
 
@@ -69,7 +69,7 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
             close();
             await onApply(st.mode === 'place' ? { placeId: ids[0], plantIds: [] } : { placeId: null, plantIds: ids });
           },
-        }, count === 0 ? (st.mode === 'place' ? 'Выберите клумбу' : 'Выберите растения') : `Отметить ${formatNumber(n)} ${plural(n, PHOTO_FORMS)}`)));
+        }, count === 0 ? (st.mode === 'place' ? 'Выберите клумбу или вид' : 'Выберите растения') : `Отметить ${formatNumber(n)} ${plural(n, PHOTO_FORMS)}`)));
     };
 
     const switchMode = (m) => {

@@ -10,6 +10,7 @@ import { catalogView, speciesView, placeView, plantView } from './views/catalog.
 import { moreView, hiddenView } from './views/more.js';
 import { soonView } from './views/soon.js';
 import { seasonsHome, gridView, compareView } from './views/seasons.js';
+import { placeTaggingView } from './views/placeTagging.js';
 
 const routes = [
   { re: /^\/queue$/, view: queueView, tab: 'queue' },
@@ -18,6 +19,7 @@ const routes = [
   { re: /^\/species\/([\w-]+)$/, view: speciesView, tab: 'catalog' },
   { re: /^\/place\/([\w-]+)$/, view: placeView, tab: 'catalog' },
   { re: /^\/plant\/([\w-]+)$/, view: plantView, tab: 'catalog' },
+  { re: /^\/tagplace\/([\w-]+)$/, view: placeTaggingView, tab: 'catalog', full: true },
   { re: /^\/seasons$/, view: seasonsHome, tab: 'seasons' },
   { re: /^\/grid\/(plant|cultivar|species|place)\/([\w-]+)$/, view: gridView, tab: 'seasons' },
   { re: /^\/compare\/(cultivar|species)\/([\w-]+)$/, view: compareView, tab: 'seasons' },
@@ -148,7 +150,10 @@ async function start() {
     else refreshNav();
   });
   bus.addEventListener('photos', () => refreshNav());
-  window.addEventListener('hashchange', render);
+  window.addEventListener('hashchange', () => {
+    document.getElementById('toast')?.classList.remove('show');
+    render();
+  });
   await render();
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') {

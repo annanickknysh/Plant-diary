@@ -109,7 +109,7 @@ export async function walkView(routeId) {
     });
     rerender();
   };
-  const bedBtn = h('button', { class: 'btn primary', type: 'button', onClick: () => openTagSheet({ photos: selectedPhotos(), mode: 'place', onApply: apply }) }, 'Это клумба…');
+  const bedBtn = h('button', { class: 'btn primary', type: 'button', onClick: () => openTagSheet({ photos: selectedPhotos(), mode: 'place', onApply: apply }) }, 'Клумба или вид…');
   const plantBtn = h('button', { class: 'btn dark', type: 'button', onClick: () => openTagSheet({ photos: selectedPhotos(), mode: 'plant', onApply: apply }) }, 'Это растение…');
   const hideBtn = h('button', {
     class: 'btn ghost block', type: 'button',

@@ -37,9 +37,12 @@ export function createCultivar({ speciesId, name, notes = '' }) {
   return save('cultivars', { id: newId(), speciesId, name: name.trim(), notes, createdAt: Date.now() });
 }
 
-export function createPlace({ name, parentId = null, lat = null, lon = null, notes = '' }) {
-  return save('places', { id: newId(), parentId, name: name.trim(), lat, lon, notes, createdAt: Date.now() });
+/** kind: 'bed' — клумба или зона (может содержать растения), 'view' — вид (ракурс), без растений. */
+export function createPlace({ name, parentId = null, lat = null, lon = null, notes = '', kind = 'bed' }) {
+  return save('places', { id: newId(), parentId, name: name.trim(), lat, lon, notes, kind, createdAt: Date.now() });
 }
+
+export const isView = (id) => catalog.places.get(id)?.kind === 'view';
 
 export function createPlant({ speciesId, cultivarId = null, placeId, plantedAt = null, notes = '' }) {
   return save('plants', {
@@ -303,7 +306,7 @@ export function targetSubtitle(kind, id) {
     const n = plantsOfTarget(kind, id).length;
     return n === 1 ? 'одно растение' : `все растения: ${n}`;
   }
-  if (kind === 'place') return parentPath(id) || 'место';
+  if (kind === 'place') return [isView(id) ? 'вид' : null, parentPath(id)].filter(Boolean).join(' · ') || 'место';
   return '';
 }
 
@@ -333,4 +336,18 @@ export async function rememberTarget(kind, id) {
 
 export async function recentTargets() {
   return ((await get(STORES.meta, 'recentTargets')) || []).filter((t) => targetExists(t.kind, t.id));
+}
+
+/** Фото, отмеченные клумбой (не видом), но ещё без растений: {placeId: count}. */
+export async function placesNeedingPlants() {
+  const tagged = await photosByStatus('tagged');
+  const counts = new Map();
+  for (const p of tagged) {
+    if (p.plantIds.length) continue;
+    for (const id of p.placeIds) {
+      if (!catalog.places.has(id) || isView(id)) continue;
+      counts.set(id, (counts.get(id) || 0) + 1);
+    }
+  }
+  return counts;
 }

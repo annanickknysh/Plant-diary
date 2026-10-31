@@ -56,7 +56,7 @@ await page.getByRole('link', { name: 'Разобрать прогулку' }).fi
 await page.getByRole('heading', { name: '14 апреля 2023' }).waitFor();
 await check((await page.locator('.tile.on').count()) === 8, 'в прогулке 8 фото, все выбраны');
 await shot('walk');
-await page.getByRole('button', { name: 'Это клумба…' }).click();
+await page.getByRole('button', { name: 'Клумба или вид…' }).click();
 await page.getByRole('button', { name: 'Новая зона или клумба' }).click();
 await page.getByPlaceholder('Название, например «Клумба у крыльца»').fill('Клумба у крыльца');
 await shot('create-bed');
@@ -115,12 +115,12 @@ await check(true, 'фото скрыто как «не растение»');
 // Дерево мест: зона → клумба внутри неё
 await page.goto(`${BASE}#/queue`);
 await page.getByRole('link', { name: 'Разобрать прогулку' }).last().click();
-await page.getByRole('button', { name: 'Это клумба…' }).click();
+await page.getByRole('button', { name: 'Клумба или вид…' }).click();
 await page.getByRole('button', { name: 'Новая зона или клумба' }).click();
 await page.getByPlaceholder('Название, например «Клумба у крыльца»').fill('Зона огорода');
 await page.getByRole('button', { name: 'Создать и выбрать' }).click();
 await page.getByRole('button', { name: /Открыть «Зона огорода»/ }).click();
-await page.getByRole('button', { name: 'Новое место в «Зона огорода»' }).click();
+await page.getByRole('button', { name: 'Новая клумба в «Зона огорода»' }).click();
 await page.getByPlaceholder('Название, например «Клумба у крыльца»').fill('Грядка с клубникой');
 await page.getByRole('button', { name: 'Создать и выбрать' }).click();
 await page.waitForTimeout(200);
@@ -131,6 +131,45 @@ await page.getByPlaceholder('Найти клумбу или зону').fill('к�
 await check((await page.locator('.pick-row').count()) === 1, 'поиск по дереву находит клумбу');
 await page.keyboard.press('Escape');
 
+// Вид (ракурс) внутри зоны
+await page.goto(`${BASE}#/queue`);
+await page.getByRole('link', { name: 'Разобрать прогулку' }).last().click();
+await page.locator('.tile').first().waitFor();
+await page.getByRole('button', { name: 'Клумба или вид…' }).click();
+await page.getByRole('button', { name: /Открыть «Зона огорода»/ }).click();
+await page.getByRole('button', { name: 'Новый вид в «Зона огорода»' }).click();
+await page.getByPlaceholder('Например, «Вид на дом» или «Вид дорожки»').fill('Вид на теплицу');
+await page.getByRole('button', { name: 'Создать и выбрать' }).click();
+await page.waitForTimeout(200);
+await shot('view-created');
+await check(await page.locator('.pick-row.view.on').filter({ hasText: 'Вид на теплицу' }).isVisible(), 'вид создан внутри зоны и выбран');
+await page.getByRole('button', { name: /Отметить \d+ фото/ }).click();
+await page.getByText(/Отмечено: \d+ фото/).waitFor();
+
+// Доразметка растений в клумбе: 8 фото клумбы ещё без растений
+await page.goto(`${BASE}#/queue`);
+await page.getByRole('heading', { name: 'Доразметить растения' }).waitFor();
+await check((await page.locator('.card .list-row').first().textContent()).includes('Клумба у крыльца'), 'клумба с фото без растений показана в «Разборе»');
+await shot('queue-needs');
+await page.locator('.card .list-row').first().click();
+await page.getByRole('heading', { name: 'Растения на фото' }).waitFor();
+await check((await page.locator('.tile').count()) === 8, 'в доразметке 8 фото без растений');
+await page.getByRole('button', { name: 'Снять', exact: true }).click();
+await page.locator('.tile').nth(0).click();
+await page.locator('.tile').nth(1).click();
+await page.getByRole('button', { name: 'Отметить растения…' }).click();
+await page.getByText('Растут в отмеченной клумбе').waitFor();
+await check(true, 'в списке сначала растения этой клумбы');
+await page.getByRole('button', { name: /Хоста «June»/ }).first().click();
+await page.getByRole('button', { name: 'Отметить 2 фото' }).click();
+await page.getByText('Растения отмечены на 2 фото').waitFor();
+await page.waitForTimeout(300);
+await check((await page.locator('.tile').count()) === 6, 'после отметки осталось 6 фото без растений');
+await page.getByRole('button', { name: /Все фото/ }).click();
+await page.waitForTimeout(300);
+await check((await page.locator('.tile-plants').count()) === 5, 'во «Все фото» значки растений на 5 фото (2 новых + 3 отмеченных при разборе)');
+await shot('tagplace');
+
 // Каталог
 await page.goto(`${BASE}#/catalog`);
 await page.getByRole('link', { name: /Хоста/ }).first().click();
@@ -139,7 +178,7 @@ await shot('species');
 await page.getByRole('link', { name: /Хоста «June»/ }).click();
 await page.getByRole('heading', { name: 'Хоста «June»' }).waitFor();
 const plantPhotos = await page.locator('.photo-grid .tile').count();
-await check(plantPhotos === 3, `у растения 3 фото (получено ${plantPhotos})`);
+await check(plantPhotos === 5, `у растения 5 фото (получено ${plantPhotos})`);
 await shot('plant');
 await page.locator('.photo-grid .tile').first().click();
 await page.locator('.viewer-img').waitFor();

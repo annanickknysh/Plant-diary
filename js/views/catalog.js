@@ -118,7 +118,7 @@ function drawPlaces(el, s) {
     for (const p of places.filter((x) => (x.parentId || null) === parentId).sort(byName)) {
       const n = plants.filter((x) => x.placeId === p.id).length;
       const st = s.places.get(p.id);
-      const row = listRow(`#/place/${p.id}`, st?.cover, p.name, countText(n, st?.count || 0));
+      const row = listRow(`#/place/${p.id}`, st?.cover, p.name, p.kind === 'view' ? `вид · ${countText(null, st?.count || 0)}` : countText(n, st?.count || 0));
       row.style.paddingLeft = `${12 + depth * 20}px`;
       el.append(row);
       if (depth < 4) walk(p.id, depth + 1);
@@ -193,29 +193,37 @@ export async function placeView(id) {
   if (!place) return notFound(page);
   const [s, photos] = await Promise.all([stats(), photosOfPlace(id)]);
   page.append(h('header', { class: 'page-head tight' }, h('h1', null, place.name),
-    h('p', { class: 'muted' }, [parentPath(id), typeof place.lat === 'number' ? 'есть точка GPS' : null].filter(Boolean).join(' · '))),
+    h('p', { class: 'muted' }, [place.kind === 'view' ? 'вид' : null, parentPath(id), typeof place.lat === 'number' ? 'есть точка GPS' : null].filter(Boolean).join(' · '))),
   entityActions('places', place, () => placeForm(place), place.parentId ? `#/place/${place.parentId}` : '#/catalog/places'));
   if (place.notes) page.append(h('p', { class: 'notes' }, place.notes));
   page.append(viewLinks('place', id, null));
+  const isViewPlace = place.kind === 'view';
+  if (!isViewPlace) {
+    const withoutPlants = photos.filter((p) => !p.plantIds.length && p.status !== 'hidden').length;
+    page.append(h('a', { class: 'btn block', href: `#/tagplace/${id}` }, icon('leaf', 20),
+      withoutPlants ? `Отметить растения на фото · ${formatNumber(withoutPlants)} без растений` : 'Отметить растения на фото'));
+  }
 
   const children = [...catalog.places.values()].filter((p) => p.parentId === id).sort(byName);
   if (children.length) {
     page.append(h('h2', { class: 'section-title' }, 'Внутри'));
     const list = h('div', { class: 'list' });
-    for (const c of children) list.append(listRow(`#/place/${c.id}`, s.places.get(c.id)?.cover, c.name, countText(null, s.places.get(c.id)?.count || 0)));
+    for (const c of children) list.append(listRow(`#/place/${c.id}`, s.places.get(c.id)?.cover, c.name, `${c.kind === 'view' ? 'вид · ' : ''}${countText(null, s.places.get(c.id)?.count || 0)}`));
     page.append(list);
   }
-  const plants = [...catalog.plants.values()].filter((p) => p.placeId === id).sort((a, b) => varietyName(a).localeCompare(varietyName(b), 'ru'));
-  page.append(h('h2', { class: 'section-title' }, 'Растения'));
-  const plist = h('div', { class: 'list' });
-  for (const p of plants) {
-    const st = s.plants.get(p.id);
-    plist.append(listRow(`#/plant/${p.id}`, st?.cover, varietyName(p), `${countText(null, st?.count || 0)}${p.status !== 'growing' ? ` · ${STATUS[p.status]}` : ''}`));
+  if (!isViewPlace) {
+    const plants = [...catalog.plants.values()].filter((p) => p.placeId === id).sort((a, b) => varietyName(a).localeCompare(varietyName(b), 'ru'));
+    page.append(h('h2', { class: 'section-title' }, 'Растения'));
+    const plist = h('div', { class: 'list' });
+    for (const p of plants) {
+      const st = s.plants.get(p.id);
+      plist.append(listRow(`#/plant/${p.id}`, st?.cover, varietyName(p), `${countText(null, st?.count || 0)}${p.status !== 'growing' ? ` · ${STATUS[p.status]}` : ''}`));
+    }
+    if (!plants.length) plist.append(h('p', { class: 'muted empty-note' }, 'Здесь пока нет растений.'));
+    page.append(plist, h('div', { class: 'add-row' },
+      h('button', { class: 'btn', type: 'button', onClick: () => plantForm({ placeId: id }) }, icon('plus', 20), 'Растение'),
+      placeDepth(id) < 2 ? h('button', { class: 'btn', type: 'button', onClick: () => placeForm({ parentId: id }) }, icon('plus', 20), 'Место внутри') : null));
   }
-  if (!plants.length) plist.append(h('p', { class: 'muted empty-note' }, 'Здесь пока нет растений.'));
-  page.append(plist, h('div', { class: 'add-row' },
-    h('button', { class: 'btn', type: 'button', onClick: () => plantForm({ placeId: id }) }, icon('plus', 20), 'Растение'),
-    placeDepth(id) < 2 ? h('button', { class: 'btn', type: 'button', onClick: () => placeForm({ parentId: id }) }, icon('plus', 20), 'Место внутри') : null));
 
   page.append(h('h2', { class: 'section-title' }, `Фото · ${formatNumber(photos.length)}`), monthGroupedGrid(photos, { emptyText: 'Фото этого места пока нет.' }));
   return page;
@@ -330,12 +338,17 @@ function placeForm(place) {
     title: place.id ? 'Место' : 'Новое место',
     fields: [
       { name: 'name', label: 'Название', value: place.name, required: true, placeholder: 'Например, Клумба у крыльца' },
+      { name: 'kind', label: 'Что это', type: 'select', value: place.kind || 'bed', options: [{ value: 'bed', label: 'Клумба, зона или другое место' }, { value: 'view', label: 'Вид (ракурс, который снимаю из года в год)' }] },
       { name: 'parentId', label: 'Входит в', type: 'custom', build: () => placeField({ value: place.parentId || null, title: 'Входит в', excludeId: place.id || null, allowNone: true }) },
       { name: 'notes', label: 'Описание', type: 'textarea', value: place.notes, placeholder: 'Солнце до обеда, почва…' },
     ],
     onSubmit: async (v) => {
       if (!v.name.trim()) throw new Error('Введите название.');
-      const data = { name: v.name.trim(), parentId: v.parentId || null, notes: v.notes };
+      const data = { name: v.name.trim(), parentId: v.parentId || null, notes: v.notes, kind: v.kind };
+      if (v.kind === 'view' && place.id) {
+        if ([...catalog.plants.values()].some((p) => p.placeId === place.id)) throw new Error('Здесь растут растения — вид не может содержать растения. Сначала перенесите их.');
+        if ([...catalog.places.values()].some((p) => p.parentId === place.id)) throw new Error('Внутри есть другие места — вид не может их содержать.');
+      }
       if (place.id) await updateEntity('places', { ...place, ...data });
       else {
         const created = await createPlace(data);

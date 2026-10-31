@@ -1,13 +1,14 @@
 // Экран «Разбор»: неразобранные фото, сгруппированные в прогулки.
 import { h, photoImg } from '../ui/dom.js';
-import { photosByStatus, countPhotos, getSetting, setSetting } from '../data/store.js';
+import { photosByStatus, countPhotos, getSetting, setSetting, placesNeedingPlants, catalog, parentPath } from '../data/store.js';
+import { icon } from '../ui/dom.js';
 import { groupWalks } from '../lib/walks.js';
 import { formatDate, formatTime, formatNumber, plural, PHOTO_FORMS } from '../lib/format.js';
 import { importButtons } from '../ui/importButtons.js';
 import { rerender } from '../app.js';
 
 const PAGE = 20;
-const ui = { onlyNoDate: false, shown: PAGE };
+const ui = { onlyNoDate: false, shown: PAGE, allNeeds: false };
 
 export async function queueView() {
   const [fresh, counts, gap, order] = await Promise.all([
@@ -34,11 +35,14 @@ export async function queueView() {
       h('span', { class: 'muted' }, `${pct}%`)),
     h('div', { class: 'bar', role: 'progressbar', 'aria-label': 'Разобрано', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(pct) }, h('div', { style: { width: `${pct}%` } }))));
 
+  const needs = await placesNeedingPlants();
   if (counts.fresh === 0) {
     page.append(h('section', { class: 'empty' },
       h('h2', null, 'Всё разобрано'),
       h('p', null, 'Неразобранных фото не осталось. Добавьте новые, когда появятся.'),
       importButtons({ compact: true })));
+    const sec = needsSection(needs);
+    if (sec) page.append(sec);
     return page;
   }
 
@@ -52,6 +56,9 @@ export async function queueView() {
       onClick: () => { ui.onlyNoDate = !ui.onlyNoDate; ui.shown = PAGE; rerender(); },
     }, `Без даты · ${formatNumber(noDateCount)}`) : null));
 
+  const sec = needsSection(needs);
+  if (sec) page.append(sec);
+
   let walks = groupWalks(ui.onlyNoDate ? fresh.filter((p) => p.dateApprox) : fresh, gap);
   if (order === 'new') walks.reverse();
   const list = h('div', { class: 'walk-list' });
@@ -63,6 +70,22 @@ export async function queueView() {
   }
   page.append(h('div', { class: 'add-more' }, importButtons({ compact: true })));
   return page;
+}
+
+/** Клумбы, где есть фото без отмеченных растений — чтобы вернуться и доразметить. */
+function needsSection(needs) {
+  if (!needs.size) return null;
+  const rows = [...needs.entries()].sort((a, b) => b[1] - a[1]);
+  const shown = ui.allNeeds ? rows : rows.slice(0, 3);
+  return h('section', { class: 'card' },
+    h('h2', { class: 'card-title' }, 'Доразметить растения'),
+    h('p', { class: 'muted small' }, 'Фото уже отмечены клумбой, но растения на них ещё не указаны.'),
+    h('div', { class: 'list' }, shown.map(([id, n]) => h('a', { class: 'list-row compact', href: `#/tagplace/${id}` },
+      h('span', { class: 'list-text' }, h('span', { class: 'list-title' }, catalog.places.get(id).name),
+        h('span', { class: 'list-sub' }, [parentPath(id), `${formatNumber(n)} ${plural(n, PHOTO_FORMS)} без растений`].filter(Boolean).join(' · '))),
+      icon('chevron', 18)))),
+    rows.length > 3 ? h('button', { class: 'btn small ghost', type: 'button', onClick: () => { ui.allNeeds = !ui.allNeeds; rerender(); } },
+      ui.allNeeds ? 'Свернуть' : `Показать все клумбы (${rows.length})`) : null);
 }
 
 function walkCard(w) {
