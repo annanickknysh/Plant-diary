@@ -28,6 +28,7 @@ export function openViewer(photos, index, { onChange, actions = [] } = {}) {
     draw();
   };
   const onKey = (e) => {
+    if (document.querySelector('.sheet-overlay')) return; // сначала закрывается панель поверх просмотра
     if (e.key === 'Escape') close();
     if (e.key === 'ArrowLeft') go(-1);
     if (e.key === 'ArrowRight') go(1);

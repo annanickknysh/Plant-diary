@@ -194,7 +194,24 @@ await page.locator('.viewer-img').waitFor();
 await page.waitForTimeout(400);
 await check(await page.locator('.viewer .chip.plant').first().isVisible(), 'в просмотре видна отметка растения');
 await shot('viewer');
+// «Отметить» из просмотра открывает панель разметки поверх фото
+await page.locator('.viewer').getByRole('button', { name: 'Отметить' }).click();
+await page.locator('.sheet').waitFor();
+await page.waitForTimeout(300);
+const onTop = await page.evaluate(() => {
+  const r = document.querySelector('.sheet').getBoundingClientRect();
+  return !!document.elementFromPoint(r.left + r.width / 2, r.top + 40)?.closest('.sheet');
+});
+await check(onTop, 'панель разметки из просмотра видна поверх фото');
+await page.getByRole('button', { name: 'Клумба или вид' }).click();
+await page.getByRole('button', { name: /Открыть «Зона огорода»/ }).click();
+await page.getByRole('button', { name: /Вид на теплицу/ }).click();
+await page.getByRole('button', { name: 'Отметить 1 фото' }).click();
+await page.locator('.viewer .chip', { hasText: 'Вид на теплицу' }).waitFor();
+await check(true, 'отметка из просмотра сохранилась и видна на фото');
+await shot('viewer-tagged');
 await page.keyboard.press('Escape');
+await page.locator('.viewer').waitFor({ state: 'detached' });
 
 await page.goto(`${BASE}#/catalog/places`);
 await page.waitForTimeout(300);
