@@ -422,3 +422,8 @@ body.fullscreen-route #view { padding-bottom: 0; }
 .day-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .day-strip { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .day-strip .thumb { border: none; padding: 0; cursor: pointer; }
+
+/* Выбор вида и сорта */
+.pick-line { display: flex; align-items: center; gap: 4px; }
+.pick-line .pick-row { flex: 1; min-width: 0; }
+.list-picker .btn.dashed { margin-top: 12px; }

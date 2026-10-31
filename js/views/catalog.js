@@ -7,6 +7,7 @@ import {
 } from '../data/store.js';
 import { monthGroupedGrid } from '../ui/photoGrid.js';
 import { placeField } from '../ui/placePicker.js';
+import { varietyFields } from '../ui/varietyPicker.js';
 import { openEntryForm, entryList, quickEntry } from '../ui/entryForm.js';
 import { formatNumber, plural, PHOTO_FORMS, PLANT_FORMS, formatDate } from '../lib/format.js';
 import { rerender } from '../app.js';
@@ -376,22 +377,19 @@ function placeForm(place) {
 }
 
 function plantForm(plant) {
-  const species = [...catalog.species.values()].sort(byName);
-  if (!species.length) { toast('Сначала добавьте вид'); return; }
-  if (!catalog.places.size) { toast('Сначала добавьте место'); return; }
-  const speciesId = plant.speciesId || species[0].id;
-  const cultivars = [...catalog.cultivars.values()].filter((c) => c.speciesId === speciesId).sort(byName);
+  const variety = varietyFields({ speciesId: plant.speciesId || null, cultivarId: plant.cultivarId || null });
   formSheet({
     title: plant.id ? 'Растение' : 'Новое растение',
     fields: [
-      { name: 'speciesId', label: 'Вид', type: 'select', value: speciesId, options: species.map((s) => ({ value: s.id, label: s.name })) },
-      { name: 'cultivarId', label: 'Сорт', type: 'select', value: plant.cultivarId || '', options: [{ value: '', label: 'Без сорта' }, ...cultivars.map((c) => ({ value: c.id, label: c.name }))] },
+      variety.species,
+      variety.cultivar,
       { name: 'placeId', label: 'Где растёт', type: 'custom', build: () => placeField({ value: plant.placeId || null, title: 'Где растёт' }) },
       { name: 'plantedAt', label: 'Когда посажено (год или дата)', value: plant.plantedAt || '', placeholder: '2021' },
       { name: 'status', label: 'Состояние', type: 'select', value: plant.status || 'growing', options: Object.entries(STATUS).map(([value, label]) => ({ value, label })) },
       { name: 'notes', label: 'Заметки', type: 'textarea', value: plant.notes },
     ],
     onSubmit: async (v) => {
+      if (!v.speciesId) throw new Error('Выберите вид.');
       if (!v.placeId) throw new Error('Выберите, где растёт растение.');
       const cultivarOk = !v.cultivarId || catalog.cultivars.get(v.cultivarId)?.speciesId === v.speciesId;
       const data = { speciesId: v.speciesId, cultivarId: cultivarOk ? v.cultivarId || null : null, placeId: v.placeId, plantedAt: v.plantedAt.trim() || null, status: v.status, notes: v.notes };

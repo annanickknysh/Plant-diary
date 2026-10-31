@@ -76,7 +76,7 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
         clear(lists);
         lists.append(...[st.query ? null : suggestionSection(), ...plantSections()].filter(Boolean));
         lists.append(h('button', { class: 'btn dashed block', type: 'button', onClick: () => { st.creating = true; draw(); } },
-          icon('plus', 20), 'Создать новое растение'));
+          icon('plus', 20), st.query.trim() ? `Создать растение «${st.query.trim()}»` : 'Создать новое растение'));
       };
       drawLists();
       }
@@ -237,6 +237,7 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
       const species = h('input', { type: 'text', list: 'dl-species', autocomplete: 'off', placeholder: 'Например, Хоста' });
       const cultivar = h('input', { type: 'text', list: 'dl-cultivars', autocomplete: 'off', placeholder: 'Например, June (можно оставить пустым)' });
       const findSpecies = () => speciesList.find((s) => norm(s.name) === norm(species.value));
+      const known0 = () => !!findSpecies();
       species.addEventListener('input', () => {
         const sp = findSpecies();
         clear(dlCult).append(...[...catalog.cultivars.values()].filter((c) => sp && c.speciesId === sp.id).map((c) => h('option', { value: c.name })));
@@ -270,7 +271,18 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
         st.creating = false;
         draw();
       });
-      setTimeout(() => species.focus(), 30);
+      // Текст из поиска сразу переносится в форму: «Пион Сара Бернар» → вид «Пион», сорт «Сара Бернар»
+      const q = st.query.trim().replace(/\s+/g, ' ');
+      if (q) {
+        const known = speciesList.filter((s) => norm(q) === norm(s.name) || norm(q).startsWith(`${norm(s.name)} `))
+          .sort((a, b) => b.name.length - a.name.length)[0];
+        if (known) {
+          species.value = known.name;
+          cultivar.value = q.slice(known.name.length).trim();
+        } else species.value = `${q[0].toUpperCase()}${q.slice(1)}`;
+        species.dispatchEvent(new Event('input'));
+      }
+      setTimeout(() => (species.value && !cultivar.value && known0() ? cultivar : species).focus(), 30);
       return form;
     };
 
