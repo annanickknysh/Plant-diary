@@ -83,6 +83,7 @@ export function updatePhotos(ids, mutate) {
       const p = await promisify(s.get(id));
       if (!p) continue;
       mutate(p);
+      p.updatedAt = Date.now();
       s.put(p);
       changed.push(p);
     }

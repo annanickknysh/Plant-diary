@@ -2,10 +2,11 @@
 import { h, icon, photoImg, toast } from '../ui/dom.js';
 import { countPhotos, getSetting, setSetting, photosByStatus, unhidePhotos, deletedIds, forgetDeleted, deletePhotos } from '../data/store.js';
 import { importButtons } from '../ui/importButtons.js';
+import { backupCard } from '../ui/backupCard.js';
 import { formatNumber, formatBytes, formatDayShort, plural, PHOTO_FORMS } from '../lib/format.js';
 import { rerender } from '../app.js';
 
-export const APP_VERSION = '0.3.1';
+export const APP_VERSION = '0.4.0';
 
 export async function moreView() {
   const [counts, gap, quality, estimate, persisted, deleted] = await Promise.all([
@@ -23,6 +24,7 @@ export async function moreView() {
     h('h2', { class: 'card-title' }, 'Добавить фото'),
     h('p', { class: 'muted' }, 'Дубли распознаются автоматически, поэтому одну и ту же папку можно выбирать повторно — например, если импорт прервался.'),
     importButtons()));
+  page.append(await backupCard());
 
   page.append(h('section', { class: 'card' },
     h('h2', { class: 'card-title' }, 'Фото'),
@@ -69,9 +71,7 @@ export async function moreView() {
     h('label', { class: 'field', for: 'gap' }, h('span', null, 'Новая прогулка, если перерыв между снимками больше'), gapSel),
     h('label', { class: 'field', for: 'quality' }, h('span', null, 'Качество копий для полноэкранного просмотра'), qSel)));
 
-  page.append(h('section', { class: 'card' },
-    h('h2', { class: 'card-title' }, 'Скоро'),
-    h('p', { class: 'muted' }, 'Резервная копия и перенос между компьютером и телефоном одним файлом появятся в версии с дневником.')),
+  page.append(
   h('p', { class: 'muted center small' }, `Дневник растений · версия ${APP_VERSION}`));
   return page;
 }

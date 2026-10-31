@@ -3,7 +3,7 @@
 import { parseExif } from '../lib/exif.js';
 import { makeResized, saveImages, THUMB_SIZE, FULL_SIZE } from './images.js';
 import { STORES, get, put } from './db.js';
-import { emit, getSetting, deletedIds } from './store.js';
+import { emit, getSetting, deletedIds, tagPhotos } from './store.js';
 
 const IMAGE_EXT = /\.(jpe?g|png|webp|heic|heif|avif)$/i;
 
@@ -36,8 +36,11 @@ export function isImageFile(f) {
   return (f.type && f.type.startsWith('image/')) || IMAGE_EXT.test(f.name);
 }
 
-/** Добавить файлы в очередь импорта. Можно вызывать, пока идёт предыдущий импорт. */
-export function importFiles(fileList) {
+/**
+ * Добавить файлы в очередь импорта. Можно вызывать, пока идёт предыдущий импорт.
+ * @param opts.tag — сразу отметить фото: {placeId, plantIds} (съёмка из приложения)
+ */
+export function importFiles(fileList, { tag = null } = {}) {
   const files = [...fileList];
   const images = files.filter(isImageFile);
   if (!importState.running) {
@@ -45,7 +48,7 @@ export function importFiles(fileList) {
   }
   importState.skipped += files.length - images.length;
   importState.total += images.length;
-  queue.push(...images);
+  queue.push(...images.map((file) => ({ file, tag })));
   if (!importState.running) run();
   else progress(true);
 }
@@ -57,9 +60,10 @@ async function run() {
   const quality = (await getSetting('fullQuality')) === 'economy' ? { size: 1200, q: 0.78 } : { size: FULL_SIZE, q: 0.82 };
   const worker = async () => {
     while (queue.length) {
-      const file = queue.shift();
+      const { file, tag } = queue.shift();
       try {
-        await importOne(file, quality, deleted);
+        const id = await importOne(file, quality, deleted);
+        if (id && tag) await tagPhotos([id], tag);
       } catch (e) {
         importState.failed.push({ name: file.name, reason: describeError(file, e) });
       }
@@ -90,11 +94,11 @@ async function importOne(file, quality, deleted) {
   const id = await hashFile(file);
   if (deleted.has(id)) {
     importState.deletedBefore++;
-    return;
+    return null;
   }
   if (await get(STORES.photos, id)) {
     importState.duplicates++;
-    return;
+    return id;
   }
   const head = await file.slice(0, 256 * 1024).arrayBuffer();
   const exif = parseExif(head);
@@ -125,4 +129,5 @@ async function importOne(file, quality, deleted) {
     plantIds: [],
   });
   importState.added++;
+  return id;
 }

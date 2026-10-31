@@ -12,7 +12,7 @@ const norm = (s) => (s || '').toLowerCase().replace(/ё/g, 'е').trim();
 /**
  * @param {{photos: Array, mode: 'place'|'plant', onApply: ({placeId, plantIds}) => Promise}} opts
  */
-export async function openTagSheet({ photos, mode: initialMode = 'place', onApply, startLevel = null }) {
+export async function openTagSheet({ photos, mode: initialMode = 'place', onApply, startLevel = null, title = null, cta = null, singlePlant = false }) {
   const recentPlaces = (await getSetting('recentPlaces')).filter((id) => catalog.places.has(id));
   const recentPlants = (await getSetting('recentPlants')).filter((id) => catalog.plants.has(id));
   const center = centerOf(photos);
@@ -26,7 +26,7 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
     const draw = () => {
       clear(root);
       root.append(h('div', { class: 'sheet-header' },
-        h('h2', { class: 'sheet-title' }, `Отметить ${formatNumber(n)} ${plural(n, PHOTO_FORMS)}`),
+        h('h2', { class: 'sheet-title' }, title || `Отметить ${formatNumber(n)} ${plural(n, PHOTO_FORMS)}`),
         h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Закрыть', onClick: close }, icon('close'))));
 
       const seg = h('div', { class: 'segmented', role: 'group', 'aria-label': 'Что отмечаем' },
@@ -69,7 +69,7 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
             close();
             await onApply(st.mode === 'place' ? { placeId: ids[0], plantIds: [] } : { placeId: null, plantIds: ids });
           },
-        }, count === 0 ? (st.mode === 'place' ? 'Выберите клумбу или вид' : 'Выберите растения') : `Отметить ${formatNumber(n)} ${plural(n, PHOTO_FORMS)}`)));
+        }, count === 0 ? (st.mode === 'place' ? 'Выберите клумбу или вид' : 'Выберите растения') : cta || `Отметить ${formatNumber(n)} ${plural(n, PHOTO_FORMS)}`)));
     };
 
     const switchMode = (m) => {
@@ -83,7 +83,7 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
     };
 
     const toggle = (id) => {
-      if (st.mode === 'place') {
+      if (st.mode === 'place' || singlePlant) {
         const had = st.picked.has(id);
         st.picked.clear();
         if (!had) st.picked.add(id);

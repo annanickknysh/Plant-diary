@@ -83,8 +83,16 @@ export async function deleteEntity(kind, id) {
   }
   await del(STORES[kind], id);
   catalog[kind].delete(id);
+  await rememberDeletedEntity(kind, id);
   emit('catalog');
   emit('photos');
+}
+
+/** Удалённые записи каталога запоминаются, чтобы перенос на другое устройство удалил их и там. */
+async function rememberDeletedEntity(kind, id) {
+  const list = (await get(STORES.meta, 'deletedEntities')) || [];
+  list.push({ kind, id, at: Date.now() });
+  await put(STORES.meta, list.slice(-5000), 'deletedEntities');
 }
 
 // ---------- названия ----------
@@ -406,4 +414,54 @@ export async function placesNeedingPlants() {
     }
   }
   return counts;
+}
+
+// ---------- записи дневника ----------
+
+export const ENTRY_TYPES = [
+  { key: 'bloom', label: 'Цветение', quick: 'Зацвело' },
+  { key: 'planting', label: 'Посадка', quick: 'Посадила' },
+  { key: 'feeding', label: 'Подкормка', quick: 'Подкормила' },
+  { key: 'pruning', label: 'Обрезка', quick: 'Обрезала' },
+  { key: 'transplant', label: 'Пересадка', quick: 'Пересадила' },
+  { key: 'fruit', label: 'Плодоношение', quick: 'Плоды' },
+  { key: 'disease', label: 'Болезнь или вредители', quick: 'Болеет' },
+  { key: 'note', label: 'Заметка', quick: 'Заметка' },
+];
+export const entryTypeLabel = (k) => ENTRY_TYPES.find((t) => t.key === k)?.label || 'Запись';
+
+export async function saveEntry(entry) {
+  const now = Date.now();
+  const e = entry.id ? { ...entry, updatedAt: now } : { id: newId(), createdAt: now, ...entry };
+  await put(STORES.entries, e);
+  emit('entries');
+  return e;
+}
+
+export async function deleteEntry(id) {
+  await del(STORES.entries, id);
+  await rememberDeletedEntity('entries', id);
+  emit('entries');
+}
+
+export async function allEntries() {
+  return (await getAll(STORES.entries)).sort((a, b) => b.date - a.date || stampOf(b) - stampOf(a));
+}
+
+const stampOf = (r) => r.updatedAt || r.createdAt || 0;
+
+export async function entriesFor(kind, id) {
+  const all = await allEntries();
+  if (kind === 'plant') return all.filter((e) => e.plantId === id);
+  if (kind === 'place') {
+    const ids = new Set(placeWithDescendants(id));
+    return all.filter((e) => ids.has(e.placeId) || (e.plantId && ids.has(catalog.plants.get(e.plantId)?.placeId)));
+  }
+  return all;
+}
+
+export function entryTargetName(e) {
+  if (e.plantId) return plantName(catalog.plants.get(e.plantId));
+  if (e.placeId) return placePath(e.placeId);
+  return 'Весь сад';
 }

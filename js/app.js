@@ -8,9 +8,9 @@ import { queueView } from './views/queue.js';
 import { walkView } from './views/walk.js';
 import { catalogView, speciesView, placeView, plantView } from './views/catalog.js';
 import { moreView, hiddenView } from './views/more.js';
-import { soonView } from './views/soon.js';
 import { seasonsHome, gridView, compareView } from './views/seasons.js';
 import { placeTaggingView } from './views/placeTagging.js';
+import { journalView } from './views/journal.js';
 
 const routes = [
   { re: /^\/queue$/, view: queueView, tab: 'queue' },
@@ -23,7 +23,7 @@ const routes = [
   { re: /^\/seasons$/, view: seasonsHome, tab: 'seasons' },
   { re: /^\/grid\/(plant|cultivar|species|place)\/([\w-]+)$/, view: gridView, tab: 'seasons' },
   { re: /^\/compare\/(cultivar|species)\/([\w-]+)$/, view: compareView, tab: 'seasons' },
-  { re: /^\/camera$/, view: () => soonView('camera'), tab: 'camera' },
+  { re: /^\/camera(?:\/(plant|place)\/([\w-]+))?$/, view: journalView, tab: 'camera' },
   { re: /^\/more$/, view: moreView, tab: 'more' },
   { re: /^\/hidden$/, view: hiddenView, tab: 'more' },
 ];
@@ -32,7 +32,7 @@ const TABS = [
   { key: 'queue', label: 'Разбор', icon: 'inbox', href: '#/queue' },
   { key: 'seasons', label: 'Сезоны', icon: 'grid', href: '#/seasons' },
   { key: 'catalog', label: 'Каталог', icon: 'leaf', href: '#/catalog' },
-  { key: 'camera', label: 'Съёмка', icon: 'camera', href: '#/camera' },
+  { key: 'camera', label: 'Дневник', icon: 'camera', href: '#/camera' },
   { key: 'more', label: 'Ещё', icon: 'more', href: '#/more' },
 ];
 
@@ -147,7 +147,7 @@ async function start() {
 
   bus.addEventListener('import', (e) => {
     updateBanner(e.detail);
-    if (!e.detail.running && currentRoute && ['queue', 'more'].includes(currentRoute.tab) && !currentRoute.full) rerender();
+    if (!e.detail.running && currentRoute && ['queue', 'more', 'camera'].includes(currentRoute.tab) && !currentRoute.full) rerender();
     else refreshNav();
   });
   bus.addEventListener('photos', () => refreshNav());

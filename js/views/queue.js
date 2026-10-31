@@ -2,6 +2,7 @@
 import { h, photoImg } from '../ui/dom.js';
 import { photosByStatus, countPhotos, getSetting, setSetting, placesNeedingPlants, catalog, parentPath } from '../data/store.js';
 import { icon } from '../ui/dom.js';
+import { backupReminder } from '../ui/backupCard.js';
 import { groupWalks } from '../lib/walks.js';
 import { formatDate, formatTime, formatNumber, plural, PHOTO_FORMS } from '../lib/format.js';
 import { importButtons } from '../ui/importButtons.js';
@@ -27,6 +28,9 @@ export async function queueView() {
       importButtons()));
     return page;
   }
+
+  const reminder = await backupReminder(counts.tagged);
+  if (reminder) page.append(reminder);
 
   const pct = active ? Math.round((counts.tagged / active) * 100) : 100;
   page.append(h('section', { class: 'progress-block' },

@@ -3,10 +3,11 @@ import { h, icon, photoImg, formSheet, toast, confirmAction } from '../ui/dom.js
 import {
   catalog, photosByStatus, photosOfPlant, photosOfPlace, plantName, varietyName, placePath, parentPath, placeDepth,
   createSpecies, createCultivar, createPlace, createPlant, updateEntity, deleteEntity, deleteBlocker, speciesName,
-  plantsOfTarget, comparableVariety, isView,
+  plantsOfTarget, comparableVariety, isView, entriesFor,
 } from '../data/store.js';
 import { monthGroupedGrid } from '../ui/photoGrid.js';
 import { placeField } from '../ui/placePicker.js';
+import { openEntryForm, entryList, quickEntry } from '../ui/entryForm.js';
 import { formatNumber, plural, PHOTO_FORMS, PLANT_FORMS, formatDate } from '../lib/format.js';
 import { rerender } from '../app.js';
 
@@ -197,6 +198,11 @@ export async function placeView(id) {
   entityActions('places', place, () => placeForm(place), place.parentId ? `#/place/${place.parentId}` : '#/catalog/places'));
   if (place.notes) page.append(h('p', { class: 'notes' }, place.notes));
   page.append(viewLinks('place', id, null));
+  page.append(h('div', { class: 'chips-row' },
+    h('a', { class: 'pill', href: `#/camera/place/${id}` }, icon('camera', 16), 'Снять'),
+    h('button', { class: 'pill', type: 'button', onClick: () => openEntryForm({ placeId: id }, { onSaved: () => rerender() }) }, icon('plus', 16), 'Запись')));
+  const placeEntries = await entriesFor('place', id);
+  if (placeEntries.length) page.append(h('h2', { class: 'section-title' }, 'Записи дневника'), entryList(placeEntries.slice(0, 5), { onChange: () => rerender() }));
   const isViewPlace = place.kind === 'view';
   if (!isViewPlace) {
     const withoutPlants = photos.filter((p) => !p.plantIds.length && p.status !== 'hidden' && !p.placeIds.some(isView)).length;
@@ -249,6 +255,15 @@ export async function plantView(id) {
     page.append(h('p', { class: 'muted' }, `${formatNumber(photos.length)} ${plural(photos.length, PHOTO_FORMS)} · с ${formatDate(first)} по ${formatDate(last)}`));
   }
   page.append(viewLinks('plant', id, comparableVariety(plant)));
+  page.append(h('div', { class: 'chips-row' },
+    h('a', { class: 'pill', href: `#/camera/plant/${id}` }, icon('camera', 16), 'Снять'),
+    h('button', { class: 'pill', type: 'button', onClick: () => quickEntry('bloom', { plantId: id }, () => rerender()) }, 'Зацвело сегодня'),
+    h('button', { class: 'pill', type: 'button', onClick: () => openEntryForm({ plantId: id }, { onSaved: () => rerender() }) }, icon('plus', 16), 'Запись')));
+  const plantEntries = await entriesFor('plant', id);
+  if (plantEntries.length) {
+    page.append(h('h2', { class: 'section-title' }, 'Записи дневника'), entryList(plantEntries.slice(0, 5), { showTarget: false, onChange: () => rerender() }));
+    if (plantEntries.length > 5) page.append(h('a', { class: 'btn small ghost', href: '#/camera' }, `Все записи (${plantEntries.length})`));
+  }
   const years = [...new Set(photos.map((p) => new Date(p.takenAt).getFullYear()))].sort((a, b) => b - a);
   let year = plantYear.get(id) ?? null;
   if (year !== null && !years.includes(year)) year = null;

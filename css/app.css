@@ -357,3 +357,29 @@ body.fullscreen-route #toast.show { transform: translate(-50%, 0); }
 .list-row.compact { min-height: 56px; }
 .tile-plants { position: absolute; top: 6px; right: 6px; display: inline-flex; align-items: center; gap: 2px; background: rgba(20, 28, 22, 0.75); color: #fff; font-size: 11px; font-weight: 700; border-radius: 10px; padding: 2px 6px; }
 .selectable .tile.on .tile-plants { right: 34px; }
+
+/* ---------- резервная копия ---------- */
+.stack-buttons { display: flex; flex-direction: column; gap: 8px; }
+.backup-status { display: flex; flex-direction: column; gap: 8px; }
+.backup-status:empty { display: none; }
+.backup-file { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.backup-file .list-title { word-break: break-all; font-size: 14px; }
+.row-actions { display: flex; gap: 6px; }
+.report { margin: 0; padding-left: 20px; font-size: 14px; }
+.reminder { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--warn-soft); color: var(--warn-text); text-decoration: none; font-size: 14px; font-weight: 600; }
+.reminder > span:nth-child(2) { flex: 1; }
+
+/* ---------- дневник ---------- */
+.target-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); }
+.target-row .list-title { color: var(--ink); }
+.entry-list { display: flex; flex-direction: column; gap: 6px; }
+.entry { display: flex; align-items: flex-start; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 4px 4px 4px 0; }
+.entry-main { flex: 1; min-width: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: baseline; text-align: left; border: none; background: transparent; padding: 8px 12px; cursor: pointer; color: var(--ink); }
+.entry-type { font-weight: 800; font-size: 14px; }
+.entry-date { font-size: 13px; color: var(--muted); justify-self: end; }
+.entry-target { grid-column: 1 / -1; font-size: 13px; color: var(--accent-text); font-weight: 600; }
+.entry-text { grid-column: 1 / -1; font-size: 14px; white-space: pre-line; }
+.t-bloom { color: #B0417A; }
+.t-disease { color: var(--warn-text); }
+@media (prefers-color-scheme: dark) { .t-bloom { color: #F08FC0; } }
+.pill .icon { margin-left: -2px; }
