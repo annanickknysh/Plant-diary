@@ -276,8 +276,6 @@ body.fullscreen-route #view { padding-bottom: 0; }
   background: #1D2820; color: #fff; border-radius: 12px; padding: 10px 10px 10px 16px; display: flex; align-items: center; gap: 12px;
   max-width: calc(100vw - 32px); font-size: 14px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
 }
-body.fullscreen-route #toast { bottom: auto; top: calc(12px + env(safe-area-inset-top, 0px)); transform: translate(-50%, -20px); }
-body.fullscreen-route #toast.show { transform: translate(-50%, 0); }
 #toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
 #toast > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .toast-action { flex-shrink: 0; border: none; background: transparent; color: #9DD3A8; font-weight: 800; min-height: 36px; padding: 0 8px; cursor: pointer; }

@@ -6,7 +6,7 @@ import { backupCard } from '../ui/backupCard.js';
 import { formatNumber, formatBytes, formatDayShort, plural, PHOTO_FORMS } from '../lib/format.js';
 import { rerender } from '../app.js';
 
-export const APP_VERSION = '0.4.1';
+export const APP_VERSION = '0.4.2';
 
 async function checkUpdates() {
   const reg = await navigator.serviceWorker?.getRegistration?.();

@@ -103,6 +103,12 @@ export function toast(message, { actionLabel, onAction, duration = 4000 } = {}) 
   if (actionLabel) {
     host.append(h('button', { class: 'toast-action', onClick: () => { hide(); onAction?.(); } }, actionLabel));
   }
+  // Внизу экрана, но над панелью кнопок (если она есть) и над навигацией
+  const bar = document.querySelector('.action-bar');
+  const nav = document.getElementById('tabbar');
+  const navH = nav && getComputedStyle(nav).display !== 'none' ? nav.getBoundingClientRect().height : 0;
+  const barTop = bar ? window.innerHeight - bar.getBoundingClientRect().top : 0;
+  host.style.bottom = `${Math.max(navH, barTop) + 12}px`;
   host.classList.add('show');
   clearTimeout(toastTimer);
   const hide = () => host.classList.remove('show');
