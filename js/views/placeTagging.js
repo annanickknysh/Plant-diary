@@ -21,7 +21,8 @@ export async function placeTaggingView(placeId) {
   const mem = memory.get(placeId);
 
   const all = (await photosOfPlace(placeId)).filter((p) => p.status !== 'hidden').sort((a, b) => a.takenAt - b.takenAt);
-  const without = all.filter((p) => !p.plantIds.length);
+  // Фото, отмеченные видом, — это общие планы: растения на них не размечаем
+  const without = all.filter((p) => !p.plantIds.length && !p.placeIds.some(isView));
   const photos = mem.filter === 'without' ? without : all;
   const ids = new Set(photos.map((p) => p.id));
   for (const id of [...mem.selected]) if (!ids.has(id)) mem.selected.delete(id);
@@ -39,7 +40,7 @@ export async function placeTaggingView(placeId) {
   if (!photos.length) {
     page.classList.remove('has-action-bar');
     page.append(h('section', { class: 'empty' },
-      h('h2', null, mem.filter === 'without' ? 'На всех фото уже есть растения' : 'Фото этой клумбы пока нет'),
+      h('h2', null, mem.filter === 'without' ? 'Доразмечать больше нечего' : 'Фото этой клумбы пока нет'),
       h('p', null, mem.filter === 'without' ? 'Можно открыть «Все фото» и добавить ещё растения.' : 'Отметьте фото клумбой на экране «Разбор».')));
     return page;
   }
@@ -76,6 +77,7 @@ export async function placeTaggingView(placeId) {
     const tile = h('button', { class: 'tile', type: 'button', 'aria-label': `Фото ${formatDayShort(p.takenAt)}${names.length ? `, отмечено: ${names.join(', ')}` : ''}` },
       photoImg(p.id),
       p.plantIds.length ? h('span', { class: 'tile-plants', title: names.join('\n') }, icon('leaf', 13), String(p.plantIds.length)) : null,
+      p.placeIds.some(isView) && mem.filter === 'all' ? h('span', { class: 'tile-date' }, 'вид') : null,
       h('span', { class: 'tile-check', 'aria-hidden': 'true' }, icon('check', 16)));
     tile.addEventListener('click', (e) => {
       if (e.shiftKey && last !== null) {
@@ -108,8 +110,25 @@ export async function placeTaggingView(placeId) {
       },
     }),
   }, icon('leaf', 20), 'Отметить растения…');
-  footerButtons.push(plantBtn);
-  page.append(h('footer', { class: 'action-bar' }, plantBtn));
+  const viewBtn = h('button', {
+    class: 'btn ghost block', type: 'button',
+    onClick: () => openTagSheet({
+      photos: photos.filter((p) => sel.has(p.id)),
+      mode: 'place',
+      startLevel: place.parentId || null,
+      onApply: async (selection) => {
+        const chosen = [...sel];
+        const snapshot = await tagPhotos(chosen, selection);
+        sel.clear();
+        toast(`Отмечено видом: ${formatNumber(chosen.length)} ${plural(chosen.length, PHOTO_FORMS)}`, {
+          actionLabel: 'Отменить', duration: 10000, onAction: async () => { await restorePhotos(snapshot); rerender(); },
+        });
+        rerender();
+      },
+    }),
+  }, icon('eye', 18), 'Это вид… (растения не размечаю)');
+  footerButtons.push(plantBtn, viewBtn);
+  page.append(h('footer', { class: 'action-bar' }, plantBtn, viewBtn));
   refresh();
   return page;
 }

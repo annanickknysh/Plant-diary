@@ -1,7 +1,8 @@
 // Полноэкранный просмотр фото с листанием и отметками.
 import { h, icon, clear, photoImg } from '../ui/dom.js';
 import { formatDate, formatTime } from '../lib/format.js';
-import { catalog, plantName, placePath, setPhotoTags, getPhoto, tagPhotos } from '../data/store.js';
+import { catalog, plantName, placePath, setPhotoTags, getPhoto, tagPhotos, deletePhotos, restoreDeletedPhotos } from '../data/store.js';
+import { toast, confirmAction } from '../ui/dom.js';
 import { openTagSheet } from './tagSheet.js';
 
 /**
@@ -50,7 +51,8 @@ export function openViewer(photos, index, { onChange, actions = [] } = {}) {
     if (!p.placeIds.length && !p.plantIds.length) chips.append(h('span', { class: 'muted' }, p.status === 'hidden' ? 'Скрыто: «не растение»' : 'Без отметок'));
     info.append(chips, h('div', { class: 'viewer-actions' },
       h('button', { class: 'btn small', type: 'button', onClick: addTag }, icon('plus', 18), 'Отметить'),
-      actions.map((a) => h('button', { class: 'btn small', type: 'button', onClick: () => a.onClick(photos[i]) }, a.label))));
+      actions.map((a) => h('button', { class: 'btn small', type: 'button', onClick: () => a.onClick(photos[i]) }, a.label)),
+      h('button', { class: 'btn small', type: 'button', onClick: removePhoto }, icon('trash', 16), 'Удалить')));
     if (p.fileName) info.append(h('div', { class: 'viewer-file' }, p.folder ? `${p.folder}/${p.fileName}` : p.fileName));
   };
 
@@ -61,6 +63,18 @@ export function openViewer(photos, index, { onChange, actions = [] } = {}) {
     await setPhotoTags(p.id, { placeIds, plantIds });
     onChange?.();
     drawInfo();
+  };
+
+  const removePhoto = async () => {
+    if (!confirmAction('Удалить это фото из приложения? Оригинал в галерее или папке останется.')) return;
+    const p = photos[i];
+    const snapshot = await deletePhotos([p.id]);
+    photos.splice(i, 1);
+    onChange?.();
+    toast('Фото удалено из приложения', { actionLabel: 'Отменить', duration: 10000, onAction: async () => { await restoreDeletedPhotos(snapshot); onChange?.(); } });
+    if (!photos.length) { close(); return; }
+    if (i >= photos.length) i = photos.length - 1;
+    draw();
   };
 
   const addTag = () => {

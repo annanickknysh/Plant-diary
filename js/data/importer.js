@@ -3,7 +3,7 @@
 import { parseExif } from '../lib/exif.js';
 import { makeResized, saveImages, THUMB_SIZE, FULL_SIZE } from './images.js';
 import { STORES, get, put } from './db.js';
-import { emit, getSetting } from './store.js';
+import { emit, getSetting, deletedIds } from './store.js';
 
 const IMAGE_EXT = /\.(jpe?g|png|webp|heic|heif|avif)$/i;
 
@@ -16,6 +16,7 @@ export const importState = {
   noDate: 0,
   failed: [], // {name, reason}
   skipped: 0, // не изображения
+  deletedBefore: 0, // удалены из приложения раньше
   startedAt: 0,
   finishedAt: 0,
 };
@@ -40,7 +41,7 @@ export function importFiles(fileList) {
   const files = [...fileList];
   const images = files.filter(isImageFile);
   if (!importState.running) {
-    Object.assign(importState, { total: 0, processed: 0, added: 0, duplicates: 0, noDate: 0, failed: [], skipped: 0, startedAt: Date.now(), finishedAt: 0 });
+    Object.assign(importState, { total: 0, processed: 0, added: 0, duplicates: 0, noDate: 0, failed: [], skipped: 0, deletedBefore: 0, startedAt: Date.now(), finishedAt: 0 });
   }
   importState.skipped += files.length - images.length;
   importState.total += images.length;
@@ -52,12 +53,13 @@ export function importFiles(fileList) {
 async function run() {
   importState.running = true;
   progress(true);
+  const deleted = await deletedIds();
   const quality = (await getSetting('fullQuality')) === 'economy' ? { size: 1200, q: 0.78 } : { size: FULL_SIZE, q: 0.82 };
   const worker = async () => {
     while (queue.length) {
       const file = queue.shift();
       try {
-        await importOne(file, quality);
+        await importOne(file, quality, deleted);
       } catch (e) {
         importState.failed.push({ name: file.name, reason: describeError(file, e) });
       }
@@ -84,8 +86,12 @@ async function hashFile(file) {
   return [...new Uint8Array(digest)].slice(0, 16).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function importOne(file, quality) {
+async function importOne(file, quality, deleted) {
   const id = await hashFile(file);
+  if (deleted.has(id)) {
+    importState.deletedBefore++;
+    return;
+  }
   if (await get(STORES.photos, id)) {
     importState.duplicates++;
     return;

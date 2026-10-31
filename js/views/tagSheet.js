@@ -12,13 +12,13 @@ const norm = (s) => (s || '').toLowerCase().replace(/ё/g, 'е').trim();
 /**
  * @param {{photos: Array, mode: 'place'|'plant', onApply: ({placeId, plantIds}) => Promise}} opts
  */
-export async function openTagSheet({ photos, mode: initialMode = 'place', onApply }) {
+export async function openTagSheet({ photos, mode: initialMode = 'place', onApply, startLevel = null }) {
   const recentPlaces = (await getSetting('recentPlaces')).filter((id) => catalog.places.has(id));
   const recentPlants = (await getSetting('recentPlants')).filter((id) => catalog.plants.has(id));
   const center = centerOf(photos);
   const photoPlaceIds = [...new Set(photos.flatMap((p) => p.placeIds))];
   const n = photos.length;
-  const st = { mode: initialMode, query: '', picked: new Set(), creating: false, browser: {} };
+  const st = { mode: initialMode, query: '', picked: new Set(), creating: false, browser: startLevel ? { level: startLevel, query: '', creating: false } : {} };
 
   openSheet((close) => {
     const root = h('div', { class: 'tag-sheet' });

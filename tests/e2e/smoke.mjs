@@ -108,9 +108,9 @@ if (selCount !== 1) {
   await page.getByRole('button', { name: 'Снять', exact: true }).click();
   await page.locator('.tile').first().click();
 }
-await page.getByRole('button', { name: 'Не растение — скрыть из разбора' }).click();
-await page.getByText('Скрыто: 1 фото').waitFor();
-await check(true, 'фото скрыто как «не растение»');
+await page.getByRole('button', { name: 'Не растение — удалить из приложения' }).click();
+await page.getByText('Удалено из приложения: 1 фото').waitFor();
+await check(true, 'фото «не растение» удалено из приложения');
 
 // Дерево мест: зона → клумба внутри неё
 await page.goto(`${BASE}#/queue`);
@@ -165,6 +165,15 @@ await page.getByRole('button', { name: 'Отметить 2 фото' }).click();
 await page.getByText('Растения отмечены на 2 фото').waitFor();
 await page.waitForTimeout(300);
 await check((await page.locator('.tile').count()) === 6, 'после отметки осталось 6 фото без растений');
+// Вид вместо доразметки: фото уходит из списка «без растений»
+await page.locator('.tile').first().click();
+await page.getByRole('button', { name: 'Это вид… (растения не размечаю)' }).click();
+await page.getByRole('button', { name: /Открыть «Зона огорода»/ }).click();
+await page.getByRole('button', { name: /Вид на теплицу/ }).click();
+await page.getByRole('button', { name: 'Отметить 1 фото' }).click();
+await page.getByText('Отмечено видом: 1 фото').waitFor();
+await page.waitForTimeout(300);
+await check((await page.locator('.tile').count()) === 5, 'фото, отмеченное видом, ушло из доразметки: осталось 5');
 await page.getByRole('button', { name: /Все фото/ }).click();
 await page.waitForTimeout(300);
 await check((await page.locator('.tile-plants').count()) === 5, 'во «Все фото» значки растений на 5 фото (2 новых + 3 отмеченных при разборе)');
@@ -199,7 +208,15 @@ await shot('place');
 // Ещё
 await page.goto(`${BASE}#/more`);
 await page.getByText('Скрыто («не растение»)').waitFor();
+await check(await page.getByText(/Удалено из приложения: 1 фото/).isVisible(), 'в «Ещё» видно число удалённых');
 await shot('more');
+
+// Повторный импорт: удалённое фото не возвращается
+await page.getByRole('button', { name: 'Скрыть' }).click();
+await page.locator('input[type=file]').first().setInputFiles(files);
+await page.getByText('Импорт завершён').waitFor({ timeout: 60000 });
+const report2 = await page.locator('#import-banner p').textContent();
+await check(report2.includes('добавлено 0') && report2.includes('удалены раньше 1'), `повторный импорт: ${report2}`);
 
 // Сохранность после перезагрузки
 await page.goto(`${BASE}#/queue`);

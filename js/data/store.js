@@ -191,6 +191,61 @@ export async function setPhotoTags(id, { placeIds, plantIds }) {
   emit('photos');
 }
 
+/**
+ * Удалить фото из приложения (оригиналы на устройстве не трогаются).
+ * Удалённые запоминаются, чтобы повторный импорт той же папки их не вернул.
+ * @returns снимок для отмены
+ */
+export async function deletePhotos(ids) {
+  const snapshot = await tx([STORES.photos, STORES.images, STORES.meta], 'readwrite', async (t) => {
+    const ph = t.objectStore(STORES.photos);
+    const im = t.objectStore(STORES.images);
+    const meta = t.objectStore(STORES.meta);
+    const out = [];
+    for (const id of ids) {
+      const photo = await promisify(ph.get(id));
+      if (!photo) continue;
+      const thumb = await promisify(im.get(`${id}:t`));
+      const full = await promisify(im.get(`${id}:f`));
+      out.push({ photo, thumb, full });
+      ph.delete(id);
+      im.delete(`${id}:t`);
+      im.delete(`${id}:f`);
+    }
+    const deleted = new Set((await promisify(meta.get('deletedIds'))) || []);
+    ids.forEach((id) => deleted.add(id));
+    meta.put([...deleted], 'deletedIds');
+    return out;
+  });
+  emit('photos');
+  return snapshot;
+}
+
+export async function restoreDeletedPhotos(snapshot) {
+  await tx([STORES.photos, STORES.images, STORES.meta], 'readwrite', async (t) => {
+    const ph = t.objectStore(STORES.photos);
+    const im = t.objectStore(STORES.images);
+    const meta = t.objectStore(STORES.meta);
+    for (const { photo, thumb, full } of snapshot) {
+      ph.put(photo);
+      if (thumb) im.put(thumb, `${photo.id}:t`);
+      if (full) im.put(full, `${photo.id}:f`);
+    }
+    const back = new Set(snapshot.map((x) => x.photo.id));
+    const deleted = ((await promisify(meta.get('deletedIds'))) || []).filter((id) => !back.has(id));
+    meta.put(deleted, 'deletedIds');
+  });
+  emit('photos');
+}
+
+export async function deletedIds() {
+  return new Set((await get(STORES.meta, 'deletedIds')) || []);
+}
+
+export function forgetDeleted() {
+  return put(STORES.meta, [], 'deletedIds');
+}
+
 export async function hidePhotos(ids) {
   const before = [];
   await updatePhotos(ids, (p) => {
@@ -343,7 +398,8 @@ export async function placesNeedingPlants() {
   const tagged = await photosByStatus('tagged');
   const counts = new Map();
   for (const p of tagged) {
-    if (p.plantIds.length) continue;
+    // Растения уже отмечены или фото отмечено видом (общий план) — доразмечать не нужно
+    if (p.plantIds.length || p.placeIds.some(isView)) continue;
     for (const id of p.placeIds) {
       if (!catalog.places.has(id) || isView(id)) continue;
       counts.set(id, (counts.get(id) || 0) + 1);

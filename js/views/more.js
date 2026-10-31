@@ -1,19 +1,20 @@
 // Экран «Ещё»: импорт, хранилище, скрытые фото, настройки.
 import { h, icon, photoImg, toast } from '../ui/dom.js';
-import { countPhotos, getSetting, setSetting, photosByStatus, unhidePhotos } from '../data/store.js';
+import { countPhotos, getSetting, setSetting, photosByStatus, unhidePhotos, deletedIds, forgetDeleted, deletePhotos } from '../data/store.js';
 import { importButtons } from '../ui/importButtons.js';
 import { formatNumber, formatBytes, formatDayShort, plural, PHOTO_FORMS } from '../lib/format.js';
 import { rerender } from '../app.js';
 
-export const APP_VERSION = '0.3.0';
+export const APP_VERSION = '0.3.1';
 
 export async function moreView() {
-  const [counts, gap, quality, estimate, persisted] = await Promise.all([
+  const [counts, gap, quality, estimate, persisted, deleted] = await Promise.all([
     countPhotos(),
     getSetting('walkGapMinutes'),
     getSetting('fullQuality'),
     navigator.storage?.estimate?.().catch(() => null),
     navigator.storage?.persisted?.().catch(() => null),
+    deletedIds(),
   ]);
   const page = h('div', { class: 'page' });
   page.append(h('header', { class: 'page-head' }, h('h1', null, 'Ещё')));
@@ -30,7 +31,12 @@ export async function moreView() {
       h('dt', null, 'Разобрано'), h('dd', null, formatNumber(counts.tagged)),
       h('dt', null, 'Ждут разбора'), h('dd', null, formatNumber(counts.fresh)),
       h('dt', null, 'Скрыто («не растение»)'), h('dd', null, formatNumber(counts.hidden))),
-    counts.hidden ? h('a', { class: 'btn block', href: '#/hidden' }, 'Посмотреть скрытые') : null));
+    counts.hidden ? h('a', { class: 'btn block', href: '#/hidden' }, 'Посмотреть скрытые') : null,
+    deleted.size ? h('p', { class: 'muted small' }, `Удалено из приложения: ${formatNumber(deleted.size)} ${plural(deleted.size, PHOTO_FORMS)}. При повторном импорте они пропускаются.`) : null,
+    deleted.size ? h('button', {
+      class: 'btn small', type: 'button',
+      onClick: async () => { await forgetDeleted(); toast('Удалённые фото снова можно импортировать'); rerender(); },
+    }, 'Разрешить импортировать их снова') : null));
 
   const usage = estimate?.usage;
   const quota = estimate?.quota;
@@ -107,8 +113,21 @@ export async function hiddenView() {
     });
     grid.append(h('div', { class: 'tile-wrap' }, tile));
   }
+  const del = h('button', {
+    class: 'btn ghost block', type: 'button',
+    onClick: async () => {
+      const ids = [...hiddenSel];
+      await deletePhotos(ids);
+      hiddenSel.clear();
+      toast(`Удалено: ${formatNumber(ids.length)} ${plural(ids.length, PHOTO_FORMS)}`);
+      rerender();
+    },
+  }, 'Удалить из приложения');
+  const refreshDel = () => { del.disabled = !hiddenSel.size; };
+  grid.addEventListener('click', refreshDel);
+  refreshDel();
   page.classList.add('has-action-bar');
-  page.append(grid, h('footer', { class: 'action-bar over-tabbar' }, btn));
+  page.append(grid, h('footer', { class: 'action-bar over-tabbar' }, btn, del));
   refresh();
   return page;
 }

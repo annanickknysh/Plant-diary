@@ -3,7 +3,7 @@ import { h, icon, photoImg, formSheet, toast, confirmAction } from '../ui/dom.js
 import {
   catalog, photosByStatus, photosOfPlant, photosOfPlace, plantName, varietyName, placePath, parentPath, placeDepth,
   createSpecies, createCultivar, createPlace, createPlant, updateEntity, deleteEntity, deleteBlocker, speciesName,
-  plantsOfTarget, comparableVariety,
+  plantsOfTarget, comparableVariety, isView,
 } from '../data/store.js';
 import { monthGroupedGrid } from '../ui/photoGrid.js';
 import { placeField } from '../ui/placePicker.js';
@@ -199,7 +199,7 @@ export async function placeView(id) {
   page.append(viewLinks('place', id, null));
   const isViewPlace = place.kind === 'view';
   if (!isViewPlace) {
-    const withoutPlants = photos.filter((p) => !p.plantIds.length && p.status !== 'hidden').length;
+    const withoutPlants = photos.filter((p) => !p.plantIds.length && p.status !== 'hidden' && !p.placeIds.some(isView)).length;
     page.append(h('a', { class: 'btn block', href: `#/tagplace/${id}` }, icon('leaf', 20),
       withoutPlants ? `Отметить растения на фото · ${formatNumber(withoutPlants)} без растений` : 'Отметить растения на фото'));
   }
