@@ -38,13 +38,21 @@ export function openDB() {
         if (ev.oldVersion < 2) db.createObjectStore(STORES.features);
       };
       r.onsuccess = () => {
+        document.getElementById('blocked-note')?.remove();
         const db = r.result;
         // Если открылась новая версия приложения в другом окне — уступить ей базу
         db.onversionchange = () => { db.close(); location.reload(); };
         resolve(db);
       };
       r.onerror = () => reject(r.error);
-      r.onblocked = () => reject(new Error('База занята другой вкладкой приложения. Закройте её и обновите страницу.'));
+      // Старая версия приложения открыта в другом окне и держит базу: ждём, пока её закроют
+      r.onblocked = () => {
+        const note = document.createElement('div');
+        note.id = 'blocked-note';
+        note.setAttribute('style', 'position:fixed;inset:auto 12px 12px;z-index:90;padding:14px 16px;border-radius:14px;background:#FBEBDD;color:#8A4B12;font:600 15px/1.4 sans-serif');
+        note.textContent = 'Приложение обновляется, но старая версия ещё открыта в другом окне или вкладке. Закройте её — продолжу автоматически.';
+        document.body.append(note);
+      };
     });
   }
   return dbPromise;

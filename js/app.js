@@ -140,7 +140,7 @@ async function start() {
     await openDB();
     await loadCatalog();
   } catch (e) {
-    clear(viewHost).append(h('div', { class: 'page' }, h('h1', null, 'Не удалось открыть хранилище'), h('p', null, e.message)));
+    window.__rescue?.(`Хранилище: ${e.message}`);
     return;
   }
   // Просим браузер не очищать данные при нехватке места.
@@ -158,6 +158,7 @@ async function start() {
     render();
   });
   await render();
+  window.__appStarted = true;
   // Отпечатки для подсказок считаются в фоне, когда приложение уже открылось
   setTimeout(() => indexAll().catch(() => {}), 4000);
 

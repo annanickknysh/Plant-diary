@@ -1,6 +1,6 @@
 // Service worker: приложение открывается и работает без интернета.
 // При изменении любых файлов приложения поднимайте VERSION.
-const VERSION = 'v0.5.0';
+const VERSION = 'v0.5.1';
 const CACHE = `plant-diary-${VERSION}`;
 const FILES = [
   './',
@@ -47,7 +47,16 @@ const FILES = [
 
 self.addEventListener('install', (e) => {
   // cache: 'reload' — мимо HTTP-кэша браузера, чтобы все файлы были одной, новой версии
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
+  // ?v=… — мимо кэшей браузера и GitHub, чтобы все файлы точно были одной, новой версии
+  e.waitUntil((async () => {
+    const c = await caches.open(CACHE);
+    await Promise.all(FILES.map(async (f) => {
+      const res = await fetch(`${f}${f.includes('?') ? '&' : '?'}v=${VERSION}`, { cache: 'reload' });
+      if (!res.ok) throw new Error(`${f}: ${res.status}`);
+      await c.put(f, res);
+    }));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', (e) => {

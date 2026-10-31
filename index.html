@@ -15,6 +15,40 @@
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="css/app.css">
+  <script>
+    // Страховка: если приложение не смогло запуститься, показать понятный экран с выходом из ситуации
+    (function () {
+      var shown = false;
+      function rescue(reason) {
+        if (shown) return;
+        var view = document.getElementById('view');
+        if (view && view.childElementCount && !reason) return;
+        shown = true;
+        var box = document.createElement('div');
+        box.id = 'rescue';
+        box.setAttribute('style', 'max-width:520px;margin:0 auto;padding:28px 20px;font:16px/1.5 -apple-system,Roboto,sans-serif;color:#1D2820');
+        box.innerHTML = '<h1 style="font-size:24px;margin:0 0 12px">Приложение не запустилось</h1>' +
+          '<p style="margin:0 0 12px">Ваши фото и записи хранятся отдельно и, скорее всего, целы. Попробуйте по порядку:</p>' +
+          '<ol style="margin:0 0 16px;padding-left:20px"><li>Закройте все окна и вкладки с приложением и откройте его снова.</li>' +
+          '<li>Если не помогло — нажмите «Сбросить файлы приложения». Данные дневника не удаляются.</li></ol>' +
+          '<p style="margin:0 0 16px;display:flex;gap:8px;flex-wrap:wrap">' +
+          '<button onclick="location.reload()" style="padding:12px 16px;border-radius:12px;border:1px solid #C9D0C0;background:#fff;font:inherit;font-weight:700">Перезапустить</button>' +
+          '<a href="reset.html" style="padding:12px 16px;border-radius:12px;background:#3E6B48;color:#fff;font-weight:700;text-decoration:none">Сбросить файлы приложения</a></p>' +
+          '<p style="margin:0;font-size:13px;color:#4E5A51">Для разработчика: ' + String(reason || 'экран остался пустым').replace(/[<>&]/g, '') + '</p>';
+        document.body.innerHTML = '';
+        document.body.appendChild(box);
+      }
+      window.__rescue = rescue;
+      window.addEventListener('error', function (e) {
+        // Ошибка при загрузке модулей или до первого экрана — показать страховочный экран
+        if (!window.__appStarted) rescue((e.message || 'ошибка') + (e.filename ? ' — ' + e.filename.split('/').slice(-2).join('/') + ':' + e.lineno : ''));
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        if (!window.__appStarted) rescue(e.reason && e.reason.message || String(e.reason));
+      });
+      setTimeout(function () { if (!window.__appStarted) rescue(''); }, 15000);
+    })();
+  </script>
   <script type="module" src="js/app.js"></script>
 </head>
 <body>
