@@ -1,6 +1,6 @@
 // Service worker: приложение открывается и работает без интернета.
 // При изменении любых файлов приложения поднимайте VERSION.
-const VERSION = 'v0.5.1';
+const VERSION = 'v0.6.0';
 const CACHE = `plant-diary-${VERSION}`;
 const FILES = [
   './',
@@ -43,6 +43,8 @@ const FILES = [
   './js/lib/features.js',
   './js/data/similarity.js',
   './js/ui/assistantCard.js',
+  './js/views/stats.js',
+  './reset.html',
 ];
 
 self.addEventListener('install', (e) => {

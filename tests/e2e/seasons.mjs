@@ -56,8 +56,27 @@ await check(true, 'данные подготовлены: 2 клумбы, сор
 // Экран «Сезоны»
 await page.goto(`${BASE}#/seasons`);
 await page.getByRole('heading', { name: 'Сезоны' }).waitFor();
-await check(await page.getByText('Сорта и виды в нескольких местах').isVisible(), 'сорт в нескольких клумбах показан отдельно');
+await page.locator('.list-row', { hasText: 'У крыльца' }).first().waitFor();
+await check((await page.locator('#view .list .list-row').count()) === 2, 'вкладка «Места»: две клумбы');
+await page.getByRole('button', { name: 'Растения', exact: true }).click();
+await page.waitForTimeout(200);
+await check((await page.locator('#view .list > .group-row, #view .list > .list-row').count()) === 1, 'вкладка «Растения»: один вид, свёрнут');
+await page.getByRole('button', { name: /Раскрыть «Хоста»/ }).click();
+await page.waitForTimeout(200);
+const inner = await page.locator('#view .list .list-title').allTextContents();
+await check(inner.includes('Хоста «June»') && inner.filter((t) => t === 'Хоста «June»').length === 3, `вид раскрывается: сорт и два растения (${inner.join(', ')})`);
 await shot('seasons-home');
+
+// Фото по датам
+await page.getByRole('link', { name: /Фото по датам/ }).click();
+await page.getByRole('heading', { name: 'Фото по датам' }).waitFor();
+const cells = await page.locator('.cal-cell:not(.empty)').count();
+await check(cells === 12, `в календаре месяцев с фото: ${cells}`);
+await page.getByRole('button', { name: /^май 2025/ }).click();
+await page.locator('#month-detail').waitFor();
+const dayRows = await page.locator('.day-row').count();
+await check(dayRows === 2, `в мае 2025 дней со съёмкой: ${dayRows}`);
+await shot('stats');
 
 // Сетка растения у крыльца
 await page.goto(`${BASE}#/grid/plant/${ids.a}`);

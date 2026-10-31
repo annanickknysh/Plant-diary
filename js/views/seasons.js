@@ -16,28 +16,48 @@ const SEASON_CHIPS = [['spring', 'Весна'], ['summer', 'Лето'], ['autumn
 
 // Состояние экранов по объекту: режим, фильтр лет, столбец, выбор для сравнения
 const gridState = new Map();
-const homeUi = { query: '' };
+const homeUi = { query: '', tab: 'places', open: new Set() };
 
 // ======================= выбор объекта =======================
 
 export async function seasonsHome() {
   const [tagged, recent] = await Promise.all([photosByStatus('tagged'), recentTargets()]);
-  const plantCount = new Map();
-  const placeCount = new Map();
+  // Счётчики фото: по растению, сорту, виду и по месту вместе со всем, что внутри него
+  const count = { plant: new Map(), cultivar: new Map(), species: new Map(), place: new Map() };
   const cover = new Map();
+  const bump = (kind, id, p) => {
+    count[kind].set(id, (count[kind].get(id) || 0) + 1);
+    const key = `${kind}:${id}`;
+    if (!cover.has(key) || p.takenAt > cover.get(key).takenAt) cover.set(key, p);
+  };
   for (const p of tagged) {
+    const sp = new Set();
+    const cv = new Set();
     for (const id of p.plantIds) {
-      plantCount.set(id, (plantCount.get(id) || 0) + 1);
-      if (!cover.has(id) || p.takenAt > cover.get(id).takenAt) cover.set(id, p);
+      const pl = catalog.plants.get(id);
+      if (!pl) continue;
+      bump('plant', id, p);
+      sp.add(pl.speciesId);
+      if (pl.cultivarId) cv.add(pl.cultivarId);
     }
+    sp.forEach((id) => bump('species', id, p));
+    cv.forEach((id) => bump('cultivar', id, p));
+    const places = new Set();
     for (const id of p.placeIds) {
-      placeCount.set(id, (placeCount.get(id) || 0) + 1);
-      if (!cover.has(id) || p.takenAt > cover.get(id).takenAt) cover.set(id, p);
+      let cur = catalog.places.get(id);
+      let guard = 0;
+      while (cur && guard++ < 10) { places.add(cur.id); cur = cur.parentId ? catalog.places.get(cur.parentId) : null; }
     }
+    places.forEach((id) => bump('place', id, p));
   }
+
   const page = h('div', { class: 'page' });
   page.append(h('header', { class: 'page-head' }, h('h1', null, 'Сезоны'),
-    h('p', { class: 'muted' }, 'Выберите растение, сорт или место, чтобы увидеть его по годам и сезонам.')));
+    h('p', { class: 'muted' }, 'Выберите место или растение, чтобы увидеть его по годам и сезонам.')));
+  page.append(h('a', { class: 'list-row stats-link', href: '#/stats' },
+    h('div', { class: 'list-thumb' }, icon('grid', 22)),
+    h('span', { class: 'list-text' }, h('span', { class: 'list-title' }, 'Фото по датам'), h('span', { class: 'list-sub' }, 'за какие месяцы и дни есть снимки')),
+    icon('chevron', 18)));
 
   if (!tagged.length) {
     page.append(h('section', { class: 'empty' }, h('h2', null, 'Пока нечего показать'),
@@ -48,42 +68,86 @@ export async function seasonsHome() {
 
   const search = h('input', { type: 'search', placeholder: 'Найти растение, сорт или место', 'aria-label': 'Поиск', autocomplete: 'off' });
   search.value = homeUi.query;
+  const tabs = h('div', { class: 'segmented', role: 'group', 'aria-label': 'Раздел' });
   const body = h('div', { class: 'list' });
-  page.append(h('label', { class: 'search' }, icon('search', 18), search), body);
+  page.append(h('label', { class: 'search' }, icon('search', 18), search), tabs, body);
 
-  const row = (kind, id, coverPhoto, count) => h('a', { class: 'list-row', href: `#/grid/${kind}/${id}` },
-    h('div', { class: 'list-thumb' }, coverPhoto ? photoImg(coverPhoto.id) : icon(kind === 'place' ? 'pin' : 'leaf', 22)),
-    h('span', { class: 'list-text' }, h('span', { class: 'list-title' }, targetName(kind, id)),
-      h('span', { class: 'list-sub' }, [targetSubtitle(kind, id), count != null ? `${formatNumber(count)} ${plural(count, PHOTO_FORMS)}` : null].filter(Boolean).join(' · '))),
-    icon('chevron', 18));
+  const photosText = (n) => (n ? `${formatNumber(n)} ${plural(n, PHOTO_FORMS)}` : null);
+  const row = (kind, id, { depth = 0, sub = null, toggle = null } = {}) => {
+    const link = h('a', { class: 'list-row', href: `#/grid/${kind}/${id}`, style: depth ? { marginLeft: `${depth * 18}px` } : null },
+      h('div', { class: 'list-thumb' }, cover.get(`${kind}:${id}`) ? photoImg(cover.get(`${kind}:${id}`).id) : icon(kind === 'place' ? 'pin' : 'leaf', 22)),
+      h('span', { class: 'list-text' }, h('span', { class: 'list-title' }, kind === 'place' && catalog.places.get(id)?.kind === 'view' ? [icon('eye', 15), ' ', targetName(kind, id)] : targetName(kind, id)),
+        h('span', { class: 'list-sub' }, [sub ?? targetSubtitle(kind, id), photosText(count[kind].get(id))].filter(Boolean).join(' · '))),
+      toggle ? null : icon('chevron', 18));
+    if (!toggle) return link;
+    const open = homeUi.open.has(`${kind}:${id}`);
+    return h('div', { class: 'group-row' }, link,
+      h('button', {
+        class: `drill${open ? ' open' : ''}`, type: 'button', 'aria-expanded': String(open), 'aria-label': `${open ? 'Свернуть' : 'Раскрыть'} «${targetName(kind, id)}»: ${toggle}`,
+        onClick: () => { const k = `${kind}:${id}`; if (open) homeUi.open.delete(k); else homeUi.open.add(k); draw(); },
+      }, h('span', null, String(toggle)), icon('chevron', 18)));
+  };
 
-  const plantRows = () => [...catalog.plants.values()].filter((p) => plantCount.get(p.id))
-    .sort((a, b) => varietyName(a).localeCompare(varietyName(b), 'ru'));
-  const multi = (kind) => [...catalog[kind === 'cultivar' ? 'cultivars' : 'species'].values()]
-    .filter((x) => plantsOfTarget(kind, x.id).length > 1);
+  const drawPlaces = () => {
+    const kids = (pid) => [...catalog.places.values()].filter((p) => (p.parentId || null) === pid && count.place.get(p.id))
+      .sort((a, b) => (a.kind === 'view') - (b.kind === 'view') || a.name.localeCompare(b.name, 'ru'));
+    const walk = (pid, depth) => {
+      for (const p of kids(pid)) {
+        const inner = kids(p.id);
+        body.append(row('place', p.id, { depth, sub: p.kind === 'view' ? 'вид' : depth ? null : 'зона', toggle: inner.length || null }));
+        if (inner.length && homeUi.open.has(`place:${p.id}`)) walk(p.id, depth + 1);
+      }
+    };
+    walk(null, 0);
+  };
+
+  const drawPlants = () => {
+    const species = [...catalog.species.values()].filter((sp) => count.species.get(sp.id)).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    for (const sp of species) {
+      const plants = [...catalog.plants.values()].filter((p) => p.speciesId === sp.id && count.plant.get(p.id));
+      const cultivars = [...catalog.cultivars.values()].filter((c) => c.speciesId === sp.id && count.cultivar.get(c.id));
+      const inner = plants.length + cultivars.filter((c) => plantsOfTarget('cultivar', c.id).length > 1).length;
+      const n = plantsOfTarget('species', sp.id).length;
+      body.append(row('species', sp.id, { sub: [sp.latin, n > 1 ? `растений: ${n}` : null].filter(Boolean).join(' · ') || 'вид', toggle: inner > 1 ? inner : null }));
+      if (inner > 1 && homeUi.open.has(`species:${sp.id}`)) {
+        for (const c of cultivars) {
+          if (plantsOfTarget('cultivar', c.id).length > 1) body.append(row('cultivar', c.id, { depth: 1, sub: `сорт · растений: ${plantsOfTarget('cultivar', c.id).length}` }));
+        }
+        for (const p of plants.sort((a, b) => varietyName(a).localeCompare(varietyName(b), 'ru') || placePath(a.placeId).localeCompare(placePath(b.placeId), 'ru'))) {
+          body.append(row('plant', p.id, { depth: 1 }));
+        }
+      }
+    }
+  };
 
   const draw = () => {
     clear(body);
     const q = norm(homeUi.query);
-    const match = (kind, id, extra = '') => !q || norm(`${targetName(kind, id)} ${targetSubtitle(kind, id)} ${extra}`).includes(q);
-    if (!q && recent.length) {
-      body.append(h('h3', { class: 'eyebrow' }, 'Недавно смотрели'));
-      for (const t of recent) body.append(row(t.kind, t.id, t.kind === 'plant' || t.kind === 'place' ? cover.get(t.id) : null, null));
+    clear(tabs);
+    tabs.hidden = !!q;
+    tabs.append(
+      h('button', { type: 'button', 'aria-pressed': String(homeUi.tab === 'places'), onClick: () => { homeUi.tab = 'places'; draw(); } }, 'Места'),
+      h('button', { type: 'button', 'aria-pressed': String(homeUi.tab === 'plants'), onClick: () => { homeUi.tab = 'plants'; draw(); } }, 'Растения'));
+    if (q) {
+      // Поиск — плоским списком по всему
+      const match = (kind, id, extra = '') => norm(`${targetName(kind, id)} ${targetSubtitle(kind, id)} ${extra}`).includes(q);
+      const found = [
+        ...[...catalog.places.values()].filter((p) => count.place.get(p.id) && match('place', p.id)).map((p) => ['place', p.id]),
+        ...[...catalog.species.values()].filter((x) => count.species.get(x.id) && match('species', x.id, x.latin)).map((x) => ['species', x.id]),
+        ...[...catalog.cultivars.values()].filter((x) => count.cultivar.get(x.id) && match('cultivar', x.id)).map((x) => ['cultivar', x.id]),
+        ...[...catalog.plants.values()].filter((x) => count.plant.get(x.id) && match('plant', x.id)).map((x) => ['plant', x.id]),
+      ];
+      found.forEach(([k, id]) => body.append(row(k, id)));
+      if (!found.length) body.append(h('p', { class: 'muted empty-note' }, 'Ничего не нашлось.'));
+      return;
     }
-    const plants = plantRows().filter((p) => match('plant', p.id, catalog.species.get(p.speciesId)?.latin));
-    if (plants.length) body.append(h('h3', { class: 'eyebrow' }, 'Растения'));
-    for (const p of plants) body.append(row('plant', p.id, cover.get(p.id), plantCount.get(p.id)));
-
-    const groups = [...multi('cultivar').map((c) => ['cultivar', c.id]), ...multi('species').map((s) => ['species', s.id])]
-      .filter(([k, id]) => match(k, id));
-    if (groups.length) body.append(h('h3', { class: 'eyebrow' }, 'Сорта и виды в нескольких местах'));
-    for (const [k, id] of groups) body.append(row(k, id, null, null));
-
-    const places = [...catalog.places.values()].filter((p) => placeCount.get(p.id) && match('place', p.id))
-      .sort((a, b) => placePath(a.id).localeCompare(placePath(b.id), 'ru'));
-    if (places.length) body.append(h('h3', { class: 'eyebrow' }, 'Места'));
-    for (const p of places) body.append(row('place', p.id, cover.get(p.id), placeCount.get(p.id)));
-    if (!body.childElementCount) body.append(h('p', { class: 'muted empty-note' }, 'Ничего не нашлось.'));
+    if (recent.length) {
+      body.append(h('h3', { class: 'eyebrow' }, 'Недавно смотрели'));
+      for (const t of recent.slice(0, 4)) body.append(row(t.kind, t.id));
+      body.append(h('h3', { class: 'eyebrow' }, homeUi.tab === 'places' ? 'Все места' : 'Все растения'));
+    }
+    if (homeUi.tab === 'places') drawPlaces();
+    else drawPlants();
   };
   search.addEventListener('input', () => { homeUi.query = search.value; draw(); });
   draw();

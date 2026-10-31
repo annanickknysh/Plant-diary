@@ -7,7 +7,7 @@ import { assistantCard } from '../ui/assistantCard.js';
 import { formatNumber, formatBytes, formatDayShort, plural, PHOTO_FORMS } from '../lib/format.js';
 import { rerender } from '../app.js';
 
-export const APP_VERSION = '0.5.1';
+export const APP_VERSION = '0.6.0';
 
 async function checkUpdates() {
   const reg = await navigator.serviceWorker?.getRegistration?.();
@@ -53,6 +53,7 @@ export async function moreView() {
       h('dt', null, 'Разобрано'), h('dd', null, formatNumber(counts.tagged)),
       h('dt', null, 'Ждут разбора'), h('dd', null, formatNumber(counts.fresh)),
       h('dt', null, 'Скрыто («не растение»)'), h('dd', null, formatNumber(counts.hidden))),
+    h('a', { class: 'btn block', href: '#/stats' }, 'Фото по датам'),
     counts.hidden ? h('a', { class: 'btn block', href: '#/hidden' }, 'Посмотреть скрытые') : null,
     deleted.size ? h('p', { class: 'muted small' }, `Удалено из приложения: ${formatNumber(deleted.size)} ${plural(deleted.size, PHOTO_FORMS)}. При повторном импорте они пропускаются.`) : null,
     deleted.size ? h('button', {

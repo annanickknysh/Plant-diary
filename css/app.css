@@ -209,7 +209,7 @@ body.fullscreen-route #view { padding-bottom: 0; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 .card-title { font-size: 18px; font-weight: 800; }
 .stats { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; margin: 0; }
-.stats dt { color: var(--muted); }
+.stats dt { color: var(--muted); white-space: nowrap; }
 .stats dd { margin: 0; font-weight: 700; text-align: right; }
 
 .empty { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 22px 18px; display: flex; flex-direction: column; gap: 12px; }
@@ -399,3 +399,26 @@ body.fullscreen-route #view { padding-bottom: 0; }
 .acc-table th:first-child { text-align: left; }
 .acc-table thead th { font-size: 12px; color: var(--muted); font-weight: 600; }
 .acc-table td { font-weight: 800; }
+.group-row { display: flex; gap: 6px; align-items: stretch; }
+.group-row .list-row { flex: 1; min-width: 0; }
+.drill.open .icon { transform: rotate(90deg); }
+.segmented[hidden] { display: none; }
+.stats-link .list-thumb { background: var(--accent-soft); }
+
+/* ---------- фото по датам ---------- */
+.cal-grid { display: grid; grid-template-columns: 34px repeat(12, minmax(0, 1fr)) 36px; gap: 2px; align-items: center; }
+.cal-head { font-size: 10px; font-weight: 700; color: var(--muted); text-align: center; }
+.cal-year { font-size: 12px; font-weight: 800; color: var(--muted); }
+.cal-total { font-size: 12px; font-weight: 700; text-align: right; }
+.cal-cell { position: relative; aspect-ratio: 1 / 1; border-radius: 5px; border: none; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0; color: var(--ink); cursor: pointer; }
+.cal-cell.empty { background: transparent; border: 1px dashed var(--line); cursor: default; }
+.cal-cell.l1 { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.cal-cell.l2 { background: color-mix(in srgb, var(--accent) 38%, transparent); }
+.cal-cell.l3 { background: color-mix(in srgb, var(--accent) 62%, transparent); color: #fff; }
+.cal-cell.l4 { background: var(--accent); color: #fff; }
+.cal-cell.sel { outline: 3px solid var(--warm); outline-offset: 1px; }
+.cal-cell.has-new::after { content: ''; position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 3px; background: var(--warm); }
+.day-row { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+.day-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.day-strip { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.day-strip .thumb { border: none; padding: 0; cursor: pointer; }
