@@ -17,6 +17,12 @@ const check = async (cond, msg) => {
 };
 
 await page.goto(BASE);
+// Дата изменения файла не должна читаться при открытии окна периода (на Android это зависание)
+await page.evaluate(() => {
+  const d = Object.getOwnPropertyDescriptor(File.prototype, 'lastModified');
+  window.__lmReads = 0;
+  Object.defineProperty(File.prototype, 'lastModified', { get() { window.__lmReads++; return d.get.call(this); } });
+});
 await page.getByRole('button', { name: 'Добавить папку' }).first().waitFor();
 await check(true, 'кнопка «Добавить папку» есть и на телефоне');
 
@@ -24,12 +30,13 @@ await check(true, 'кнопка «Добавить папку» есть и на
 await page.locator('input[webkitdirectory]').first().setInputFiles(process.env.FOLDER);
 await page.getByRole('heading', { name: 'Какие фото добавить' }).waitFor();
 const sheet = page.locator('.sheet-overlay').last();
+await check(await page.evaluate(() => window.__lmReads) === 0, 'окно периода не опрашивает даты файлов');
 await check(await sheet.getByRole('button', { name: 'Всю папку' }).getAttribute('aria-pressed') === 'true', 'по умолчанию — вся папка');
 await sheet.getByLabel('С').fill('2025-01-01');
 await sheet.getByLabel('По').fill('2025-12-31');
 await sheet.getByLabel('По').dispatchEvent('change');
 const est = await sheet.locator('p.muted').first().textContent();
-await check(est.startsWith('Не больше 12 из 15'), `оценка по датам файлов: ${est}`);
+await check(est.startsWith('Дату съёмки каждого фото'), `без дат в именах — проверка при импорте: ${est}`);
 await page.screenshot({ path: `${SHOTS}-sheet.png` });
 await sheet.getByRole('button', { name: 'Добавить фото за период' }).click();
 await page.getByText('Импорт завершён').waitFor({ timeout: 60000 });

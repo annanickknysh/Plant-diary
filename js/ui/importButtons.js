@@ -3,6 +3,7 @@ import { h, icon, openSheet } from './dom.js';
 import { importFiles, isImageFile } from '../data/importer.js';
 import { tx, STORES } from '../data/db.js';
 import { formatDate, formatNumber, plural, PHOTO_FORMS } from '../lib/format.js';
+import { dateFromFileName } from '../lib/exif.js';
 
 // Выбор папки: Chrome на компьютере и Chrome на Android с версии 132.
 const supportsFolders = () => 'webkitdirectory' in document.createElement('input');
@@ -21,24 +22,36 @@ function latestPhotoTime() {
   })).catch(() => null);
 }
 
-/** Панель «Какие фото из папки добавить». */
+/**
+ * Панель «Какие фото из папки добавить».
+ * Важно: здесь не трогаем file.lastModified — на Android каждое обращение к нему у файла из папки
+ * идёт синхронным запросом к системе, и на 1500 файлах страница зависает. Даты берём из имён файлов.
+ */
 export async function openRangeSheet(fileList, { fromFolder = true } = {}) {
   const images = [...fileList].filter(isImageFile);
   if (!images.length) { importFiles(fileList); return; }
-  const times = images.map((f) => f.lastModified || 0).filter(Boolean);
-  const minT = times.length ? Math.min(...times) : Date.now();
-  const maxT = times.length ? Math.max(...times) : Date.now();
+  const named = images.map((f) => dateFromFileName(f.name));
+  const known = named.filter(Boolean);
+  const unknown = images.length - known.length;
+  let minT = Date.now();
+  let maxT = Date.now();
+  if (known.length) {
+    minT = known.reduce((a, b) => Math.min(a, b));
+    maxT = known.reduce((a, b) => Math.max(a, b));
+  }
   const latest = await latestPhotoTime();
   const today = dayStart(Date.now());
   const folder = (images[0].webkitRelativePath || '').split('/')[0];
 
   const presets = [
-    latest ? { key: 'new', label: `Новее ${formatDate(latest)}`, hint: 'после последнего фото в дневнике', from: dayStart(latest), to: Math.max(maxT, today) + DAY } : null,
-    // «Всё» — без фильтра: у скопированных фото дата файла — день копирования, а не съёмки
+    latest ? { key: 'new', label: `Новее ${formatDate(latest)}`, from: dayStart(latest), to: Math.max(maxT, today) + DAY } : null,
     { key: 'all', label: fromFolder ? 'Всю папку' : 'Все выбранные', all: true, from: dayStart(minT), to: dayStart(maxT) + DAY },
     { key: 'month', label: 'Последний месяц', from: today - 30 * DAY, to: today + DAY },
     { key: 'year', label: `${new Date().getFullYear()} год`, from: new Date(new Date().getFullYear(), 0, 1).getTime(), to: today + DAY },
   ].filter(Boolean);
+
+  const summary = [`${folder ? `Папка «${folder}»: ` : ''}${formatNumber(images.length)} ${plural(images.length, PHOTO_FORMS)}.`];
+  if (known.length) summary.push(`По именам файлов — снято с ${formatDate(minT)} по ${formatDate(maxT)}${unknown ? `, у ${formatNumber(unknown)} дата в имени не указана` : ''}.`);
 
   openSheet((close) => {
     const first = fromFolder ? presets[0] : presets.find((p) => p.all);
@@ -56,15 +69,16 @@ export async function openRangeSheet(fileList, { fromFolder = true } = {}) {
         class: 'pill', type: 'button', 'aria-pressed': String(p.key === presetKey),
         onClick: () => { range = { from: p.from, to: p.to, all: !!p.all }; sync(p.key); },
       }, p.label)));
-      // Оценка по дате файла: точная дата снимка читается из EXIF уже при импорте
       if (range.all) {
         estimate.textContent = `Будут добавлены все ${formatNumber(images.length)} ${plural(images.length, PHOTO_FORMS)}.`;
         go.textContent = `Добавить ${formatNumber(images.length)} ${plural(images.length, PHOTO_FORMS)}`;
         go.disabled = false;
         return;
       }
-      const n = images.filter((f) => !f.lastModified || (f.lastModified >= range.from - DAY)).length;
-      estimate.textContent = `Не больше ${formatNumber(n)} из ${formatNumber(images.length)} — точную дату съёмки приложение проверит при импорте и пропустит фото вне периода.`;
+      const inRange = named.filter((t) => t && t >= range.from && t < range.to).length;
+      estimate.textContent = known.length
+        ? `За этот период по именам файлов: ${formatNumber(inRange)} ${plural(inRange, PHOTO_FORMS)}${unknown ? `; ещё ${formatNumber(unknown)} без даты в имени — приложение проверит дату съёмки при импорте` : ''}.`
+        : 'Дату съёмки каждого фото приложение проверит при импорте и пропустит фото вне периода.';
       go.textContent = 'Добавить фото за период';
       go.disabled = range.from >= range.to;
     };
@@ -80,7 +94,7 @@ export async function openRangeSheet(fileList, { fromFolder = true } = {}) {
 
     return h('div', { class: 'form range-sheet' },
       h('h2', { class: 'sheet-title' }, 'Какие фото добавить'),
-      h('p', null, `${folder ? `Папка «${folder}»: ` : ''}${formatNumber(images.length)} ${plural(images.length, PHOTO_FORMS)}, файлы от ${formatDate(minT)} до ${formatDate(maxT)}.`),
+      summary.map((t) => h('p', null, t)),
       pills,
       h('div', { class: 'date-pair' },
         h('label', { class: 'field' }, h('span', null, 'С'), fromEl),

@@ -114,7 +114,10 @@ const DAY = 24 * 3600 * 1000;
 async function importOne(file, quality, deleted, range = null) {
   let exif = null;
   if (range) {
-    if (file.lastModified && file.lastModified < range.from - DAY) { importState.outOfRange++; return null; }
+    // Дата в имени файла — самая дешёвая проверка; дату изменения файла смотрим, только если её нет
+    const byName = dateFromFileName(file.name);
+    if (byName && (byName < range.from || byName >= range.to)) { importState.outOfRange++; return null; }
+    if (!byName && file.lastModified && file.lastModified < range.from - DAY) { importState.outOfRange++; return null; }
     exif = await readMeta(file);
     const t = exif.takenAt || file.lastModified;
     if (t && (t < range.from || t >= range.to)) { importState.outOfRange++; return null; }
