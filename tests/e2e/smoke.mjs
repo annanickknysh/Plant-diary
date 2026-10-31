@@ -57,8 +57,8 @@ await page.getByRole('heading', { name: '14 апреля 2023' }).waitFor();
 await check((await page.locator('.tile.on').count()) === 8, 'в прогулке 8 фото, все выбраны');
 await shot('walk');
 await page.getByRole('button', { name: 'Это клумба…' }).click();
-await page.getByRole('button', { name: 'Создать новую клумбу' }).click();
-await page.getByPlaceholder('Например, Клумба у крыльца').fill('Клумба у крыльца');
+await page.getByRole('button', { name: 'Новая зона или клумба' }).click();
+await page.getByPlaceholder('Название, например «Клумба у крыльца»').fill('Клумба у крыльца');
 await shot('create-bed');
 await page.getByRole('button', { name: 'Создать и выбрать' }).click();
 await shot('bed-picked');
@@ -80,7 +80,7 @@ await page.getByRole('button', { name: 'Это растение…' }).click();
 await page.getByRole('button', { name: 'Создать новое растение' }).click();
 await page.getByPlaceholder('Например, Хоста').fill('Хоста');
 await page.getByPlaceholder('Например, June (можно оставить пустым)').fill('June');
-await page.locator('.sheet select').selectOption({ label: 'Клумба у крыльца' });
+await check((await page.locator('.place-field').textContent()).includes('Клумба у крыльца'), 'место растения подставлено из недавних');
 await shot('create-plant');
 await page.getByRole('button', { name: 'Создать и выбрать' }).click();
 await page.getByRole('button', { name: 'Отметить 3 фото' }).click();
@@ -111,6 +111,25 @@ if (selCount !== 1) {
 await page.getByRole('button', { name: 'Не растение — скрыть из разбора' }).click();
 await page.getByText('Скрыто: 1 фото').waitFor();
 await check(true, 'фото скрыто как «не растение»');
+
+// Дерево мест: зона → клумба внутри неё
+await page.goto(`${BASE}#/queue`);
+await page.getByRole('link', { name: 'Разобрать прогулку' }).last().click();
+await page.getByRole('button', { name: 'Это клумба…' }).click();
+await page.getByRole('button', { name: 'Новая зона или клумба' }).click();
+await page.getByPlaceholder('Название, например «Клумба у крыльца»').fill('Зона огорода');
+await page.getByRole('button', { name: 'Создать и выбрать' }).click();
+await page.getByRole('button', { name: /Открыть «Зона огорода»/ }).click();
+await page.getByRole('button', { name: 'Новое место в «Зона огорода»' }).click();
+await page.getByPlaceholder('Название, например «Клумба у крыльца»').fill('Грядка с клубникой');
+await page.getByRole('button', { name: 'Создать и выбрать' }).click();
+await page.waitForTimeout(200);
+await shot('tree-picker');
+await check(await page.locator('.pick-row.on').filter({ hasText: 'Грядка с клубникой' }).isVisible(), 'клумба создана внутри зоны и выбрана');
+await page.locator('.crumb').click();
+await page.getByPlaceholder('Найти клумбу или зону').fill('клубн');
+await check((await page.locator('.pick-row').count()) === 1, 'поиск по дереву находит клумбу');
+await page.keyboard.press('Escape');
 
 // Каталог
 await page.goto(`${BASE}#/catalog`);

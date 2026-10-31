@@ -6,6 +6,7 @@ import {
   plantsOfTarget, comparableVariety,
 } from '../data/store.js';
 import { monthGroupedGrid } from '../ui/photoGrid.js';
+import { placeField } from '../ui/placePicker.js';
 import { formatNumber, plural, PHOTO_FORMS, PLANT_FORMS, formatDate } from '../lib/format.js';
 import { rerender } from '../app.js';
 
@@ -286,11 +287,6 @@ function entityActions(kind, obj, onEdit, afterDeleteHref) {
     }, icon('trash', 16), 'Удалить'));
 }
 
-const placeOptions = (excludeId) => [...catalog.places.values()]
-  .filter((p) => p.id !== excludeId && !placePath(p.id).startsWith(excludeId ? `${placePath(excludeId)} › ` : '\u0000'))
-  .sort((a, b) => placePath(a.id).localeCompare(placePath(b.id), 'ru'))
-  .map((p) => ({ value: p.id, label: placePath(p.id) }));
-
 function speciesForm(sp) {
   formSheet({
     title: sp.id ? 'Вид' : 'Новый вид',
@@ -334,7 +330,7 @@ function placeForm(place) {
     title: place.id ? 'Место' : 'Новое место',
     fields: [
       { name: 'name', label: 'Название', value: place.name, required: true, placeholder: 'Например, Клумба у крыльца' },
-      { name: 'parentId', label: 'Входит в', type: 'select', value: place.parentId || '', options: [{ value: '', label: 'Верхний уровень' }, ...placeOptions(place.id)] },
+      { name: 'parentId', label: 'Входит в', type: 'custom', build: () => placeField({ value: place.parentId || null, title: 'Входит в', excludeId: place.id || null, allowNone: true }) },
       { name: 'notes', label: 'Описание', type: 'textarea', value: place.notes, placeholder: 'Солнце до обеда, почва…' },
     ],
     onSubmit: async (v) => {
@@ -362,12 +358,13 @@ function plantForm(plant) {
     fields: [
       { name: 'speciesId', label: 'Вид', type: 'select', value: speciesId, options: species.map((s) => ({ value: s.id, label: s.name })) },
       { name: 'cultivarId', label: 'Сорт', type: 'select', value: plant.cultivarId || '', options: [{ value: '', label: 'Без сорта' }, ...cultivars.map((c) => ({ value: c.id, label: c.name }))] },
-      { name: 'placeId', label: 'Где растёт', type: 'select', value: plant.placeId || '', options: placeOptions(null) },
+      { name: 'placeId', label: 'Где растёт', type: 'custom', build: () => placeField({ value: plant.placeId || null, title: 'Где растёт' }) },
       { name: 'plantedAt', label: 'Когда посажено (год или дата)', value: plant.plantedAt || '', placeholder: '2021' },
       { name: 'status', label: 'Состояние', type: 'select', value: plant.status || 'growing', options: Object.entries(STATUS).map(([value, label]) => ({ value, label })) },
       { name: 'notes', label: 'Заметки', type: 'textarea', value: plant.notes },
     ],
     onSubmit: async (v) => {
+      if (!v.placeId) throw new Error('Выберите, где растёт растение.');
       const cultivarOk = !v.cultivarId || catalog.cultivars.get(v.cultivarId)?.speciesId === v.speciesId;
       const data = { speciesId: v.speciesId, cultivarId: cultivarOk ? v.cultivarId || null : null, placeId: v.placeId, plantedAt: v.plantedAt.trim() || null, status: v.status, notes: v.notes };
       if (plant.id) await updateEntity('plants', { ...plant, ...data });

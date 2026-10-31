@@ -331,3 +331,22 @@ body.fullscreen-route #toast.show { transform: translate(-50%, 0); }
 .cmp-handle { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; box-shadow: 0 0 6px rgba(0, 0, 0, 0.6); transform: translateX(-1px); pointer-events: none; }
 .compare-body input[type=range] { width: min(100%, 520px); accent-color: #9DD3A8; min-height: 32px; }
 .cmp-captions { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: #C9D2CB; text-align: center; }
+
+/* ---------- выбор места деревом ---------- */
+.place-browser { display: flex; flex-direction: column; gap: 10px; }
+.pick-split { display: flex; gap: 6px; align-items: stretch; }
+.pick-split .pick-row { flex: 1; min-width: 0; }
+.drill {
+  flex-shrink: 0; min-width: 64px; display: flex; align-items: center; justify-content: center; gap: 2px;
+  border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--accent-text); font-weight: 700; font-size: 14px; cursor: pointer;
+}
+.crumb { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; min-height: 40px; border: none; background: transparent; color: var(--accent-text); font-weight: 700; font-size: 15px; padding: 0 4px 0 0; cursor: pointer; }
+.pick-row.whole { border-style: dashed; }
+.create-inline { background: var(--surface-2); border-radius: 14px; padding: 12px; }
+.place-field {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 46px; width: 100%;
+  border-radius: 12px; border: 1px solid var(--line-strong); padding: 10px 12px; background: var(--surface); color: var(--ink);
+  font-weight: 500; font-size: 16px; text-align: left; cursor: pointer;
+}
+.place-field.empty { color: var(--muted); }
+.place-field-text { min-width: 0; }

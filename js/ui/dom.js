@@ -110,6 +110,8 @@ export function toast(message, { actionLabel, onAction, duration = 4000 } = {}) 
 
 // ---------- нижняя панель (sheet) ----------
 
+const sheetStack = [];
+
 /** Открыть нижнюю панель. build(close) возвращает содержимое. */
 export function openSheet(build, { label = 'Панель', tall = false } = {}) {
   const prevFocus = document.activeElement;
@@ -117,10 +119,13 @@ export function openSheet(build, { label = 'Панель', tall = false } = {}) 
   const sheet = h('section', { class: `sheet${tall ? ' tall' : ''}`, role: 'dialog', 'aria-modal': 'true', 'aria-label': label });
   const close = () => {
     overlay.remove();
+    sheetStack.splice(sheetStack.indexOf(overlay), 1);
     document.removeEventListener('keydown', onKey);
     prevFocus?.focus?.();
   };
-  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  // Escape закрывает только верхнюю панель
+  const onKey = (e) => { if (e.key === 'Escape' && sheetStack.at(-1) === overlay) close(); };
+  sheetStack.push(overlay);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
   document.addEventListener('keydown', onKey);
   sheet.append(h('div', { class: 'sheet-handle', 'aria-hidden': 'true' }), build(close));
@@ -139,6 +144,12 @@ export function formSheet({ title, fields, submitLabel = 'Сохранить', o
     for (const f of fields) {
       const id = `f-${f.name}-${Math.random().toString(36).slice(2, 7)}`;
       let input;
+      if (f.type === 'custom') {
+        const c = f.build();
+        inputs[f.name] = { get value() { return c.get(); } };
+        form.append(h('div', { class: 'field' }, h('span', null, f.label), c.el));
+        continue;
+      }
       if (f.type === 'select') {
         input = h('select', { id, name: f.name }, f.options.map((o) => h('option', { value: o.value, selected: o.value === f.value }, o.label)));
       } else if (f.type === 'textarea') {
