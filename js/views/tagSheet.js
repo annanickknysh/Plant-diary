@@ -17,8 +17,27 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
   const recentPlants = (await getSetting('recentPlants')).filter((id) => catalog.plants.has(id));
   const center = centerOf(photos);
   const photoPlaceIds = [...new Set(photos.flatMap((p) => p.placeIds))];
+  // Клумба, в которой сделаны фото (общая для всех выбранных фото, не вид).
+  // Если она есть, растение выбирается по виду/сорту, а экземпляр берётся или создаётся в этой клумбе.
+  const ctxCandidates = photos.length
+    ? photos.map((p) => p.placeIds.filter((id) => catalog.places.has(id) && catalog.places.get(id).kind !== 'view'))
+      .reduce((a, b) => a.filter((x) => b.includes(x)))
+    : [];
+  let ctxPlace = ctxCandidates[0] || null;
   const n = photos.length;
   const st = { mode: initialMode, query: '', picked: new Set(), creating: false, browser: startLevel ? { level: startLevel, query: '', creating: false } : {} };
+
+  /** Сорт «v:вид:сорт» → экземпляр в клумбе фото (существующий или новый). */
+  const resolvePlants = async (keys) => {
+    const out = [];
+    for (const k of keys) {
+      if (!k.startsWith('v:')) { out.push(k); continue; }
+      const [, speciesId, cultivarId] = k.split(':');
+      const existing = [...catalog.plants.values()].find((p) => p.speciesId === speciesId && (p.cultivarId || '') === cultivarId && p.placeId === ctxPlace);
+      out.push((existing || await createPlant({ speciesId, cultivarId: cultivarId || null, placeId: ctxPlace })).id);
+    }
+    return out;
+  };
 
   openSheet((close) => {
     const root = h('div', { class: 'tag-sheet' });
@@ -65,8 +84,9 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
         h('button', {
           class: 'btn primary block', type: 'button', disabled: count === 0,
           onClick: async () => {
-            const ids = [...st.picked];
+            let ids = [...st.picked];
             close();
+            if (st.mode === 'plant') ids = await resolvePlants(ids);
             await onApply(st.mode === 'place' ? { placeId: ids[0], plantIds: [] } : { placeId: null, plantIds: ids });
           },
         }, count === 0 ? (st.mode === 'place' ? 'Выберите клумбу или вид' : 'Выберите растения') : cta || `Отметить ${formatNumber(n)} ${plural(n, PHOTO_FORMS)}`)));
@@ -110,7 +130,47 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
       return rows.length ? [section('Рядом по GPS', rows)] : [];
     };
 
+    const varietyKey = (p) => `v:${p.speciesId}:${p.cultivarId || ''}`;
+    const plantSectionsInBed = () => {
+      const plants = [...catalog.plants.values()];
+      const out = [];
+      const ctxName = catalog.places.get(ctxPlace).name;
+      if (ctxCandidates.length > 1) {
+        out.push(h('div', { class: 'chips-row' }, h('span', { class: 'muted small' }, 'Клумба:'),
+          ctxCandidates.map((id) => h('button', { class: 'pill', type: 'button', 'aria-pressed': String(id === ctxPlace), onClick: () => { ctxPlace = id; st.picked.clear(); draw(); } }, catalog.places.get(id).name))));
+      }
+      const q = norm(st.query);
+      const here = plants.filter((p) => p.placeId === ctxPlace && p.status !== 'dead');
+      const hereKeys = new Set(here.map(varietyKey));
+      // Сорта и виды, которые растут в других местах, — по одному на сорт
+      const varieties = new Map();
+      for (const p of plants) {
+        const k = varietyKey(p);
+        if (hereKeys.has(k)) continue;
+        if (!varieties.has(k)) varieties.set(k, { key: k, sample: p, places: [] });
+        varieties.get(k).places.push(catalog.places.get(p.placeId)?.name);
+      }
+      const vRow = (v) => row(v.key, varietyName(v.sample), `растёт: ${v.places.filter(Boolean).join(', ')} · добавится в «${ctxName}»`);
+      const hRow = (p) => row(p.id, varietyName(p), `уже в «${ctxName}»`);
+      const match = (p) => norm(`${varietyName(p)} ${catalog.species.get(p.speciesId)?.latin || ''}`).includes(q);
+      if (q) {
+        const a = here.filter(match);
+        const b = [...varieties.values()].filter((v) => match(v.sample));
+        out.push(section('Найдено', [...a.map(hRow), ...b.map(vRow)]));
+        if (!a.length && !b.length) out.push(h('p', { class: 'muted' }, 'Ничего не нашлось. Создайте новое растение.'));
+        return out;
+      }
+      out.push(section(`Растут в «${ctxName}»`, here.sort((a, b) => varietyName(a).localeCompare(varietyName(b), 'ru')).map(hRow)));
+      const recKeys = [...new Set(recentPlants.map((id) => varietyKey(catalog.plants.get(id))))].filter((k) => varieties.has(k));
+      out.push(section('Недавние', recKeys.map((k) => vRow(varieties.get(k)))));
+      const rest = [...varieties.values()].filter((v) => !recKeys.includes(v.key)).sort((a, b) => varietyName(a.sample).localeCompare(varietyName(b.sample), 'ru'));
+      out.push(section('Другие растения сада', rest.map(vRow)));
+      if (!plants.length) out.push(h('p', { class: 'muted' }, 'Растений пока нет. Создайте первое.'));
+      return out;
+    };
+
     const plantSections = () => {
+      if (ctxPlace) return plantSectionsInBed();
       const plants = [...catalog.plants.values()];
       const out = [];
       const q = norm(st.query);
@@ -148,7 +208,7 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
         const sp = findSpecies();
         clear(dlCult).append(...[...catalog.cultivars.values()].filter((c) => sp && c.speciesId === sp.id).map((c) => h('option', { value: c.name })));
       });
-      const defaultPlace = photoPlaceIds[0] || recentPlaces[0] || '';
+      const defaultPlace = ctxPlace || photoPlaceIds[0] || recentPlaces[0] || '';
       let placeId = defaultPlace || null;
       const place = placeField({ value: placeId, title: 'Где растёт', onChange: (id) => { placeId = id; } });
       const err = h('p', { class: 'form-error', role: 'alert' });

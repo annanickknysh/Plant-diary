@@ -158,7 +158,7 @@ await page.getByRole('button', { name: 'Снять', exact: true }).click();
 await page.locator('.tile').nth(0).click();
 await page.locator('.tile').nth(1).click();
 await page.getByRole('button', { name: 'Отметить растения…' }).click();
-await page.getByText('Растут в отмеченной клумбе').waitFor();
+await page.getByText('Растут в «Клумба у крыльца»').waitFor();
 await check(true, 'в списке сначала растения этой клумбы');
 await page.getByRole('button', { name: /Хоста «June»/ }).first().click();
 await page.getByRole('button', { name: 'Отметить 2 фото' }).click();
@@ -179,12 +179,43 @@ await page.waitForTimeout(300);
 await check((await page.locator('.tile-plants').count()) === 5, 'во «Все фото» значки растений на 5 фото (2 новых + 3 отмеченных при разборе)');
 await shot('tagplace');
 
+// Растение из другой клумбы на фото этой клумбы → новый экземпляр здесь, клумба не прицепляется
+await page.goto(`${BASE}#/queue`);
+await page.getByRole('link', { name: 'Разобрать прогулку' }).last().click();
+await page.getByRole('heading', { name: '6 июня 2024' }).waitFor();
+await page.getByRole('button', { name: 'Клумба или вид…' }).click();
+await page.getByPlaceholder('Найти клумбу или зону').fill('клубн');
+await page.getByRole('button', { name: /Грядка с клубникой/ }).click();
+await page.getByRole('button', { name: /Отметить \d+ фото/ }).click();
+await page.getByText(/Отмечено: \d+ фото/).waitFor();
+await page.goto(`${BASE}#/queue`);
+await page.locator('.card .list-row', { hasText: 'Грядка с клубникой' }).click();
+await page.getByRole('heading', { name: 'Растения на фото' }).waitFor();
+await page.locator('.tile').first().click();
+await page.getByRole('button', { name: 'Отметить растения…' }).click();
+await page.getByPlaceholder('Найти растение, сорт, вид').fill('хост');
+await page.getByText('добавится в «Грядка с клубникой»').waitFor();
+await shot('variety-to-new-bed');
+await page.getByRole('button', { name: /Хоста «June»/ }).click();
+await page.getByRole('button', { name: 'Отметить 1 фото' }).click();
+await page.getByText('Растения отмечены на 1 фото').waitFor();
+const placesOfPhoto = await page.evaluate(async () => {
+  const s = await import('/js/data/store.js');
+  const plants = [...s.catalog.plants.values()].filter((p) => s.varietyName(p) === 'Хоста «June»');
+  const ph = (await s.photosByStatus('tagged')).find((p) => p.plantIds.some((id) => plants.find((x) => x.id === id && s.catalog.places.get(x.placeId).name === 'Грядка с клубникой')));
+  return { instances: plants.map((p) => s.catalog.places.get(p.placeId).name).sort(), photoPlaces: ph.placeIds.map((id) => s.catalog.places.get(id).name) };
+});
+await check(placesOfPhoto.instances.join(',') === 'Грядка с клубникой,Клумба у крыльца', `создан второй экземпляр: ${placesOfPhoto.instances}`);
+await check(placesOfPhoto.photoPlaces.join(',') === 'Грядка с клубникой', `у фото осталась только своя клумба: ${placesOfPhoto.photoPlaces}`);
+
 // Каталог
 await page.goto(`${BASE}#/catalog`);
 await page.getByRole('link', { name: /Хоста/ }).first().click();
 await page.getByRole('heading', { name: 'Хоста' }).waitFor();
 await shot('species');
-await page.getByRole('link', { name: /Хоста «June»/ }).click();
+await check((await page.getByRole('link', { name: /Хоста «June»/ }).count()) === 2, 'в каталоге два экземпляра Хосты «June» в разных клумбах');
+await shot('species-two-instances');
+await page.getByRole('link', { name: /Хоста «June» Клумба у крыльца/ }).click();
 await page.getByRole('heading', { name: 'Хоста «June»' }).waitFor();
 const plantPhotos = await page.locator('.photo-grid .tile').count();
 await check(plantPhotos === 5, `у растения 5 фото (получено ${plantPhotos})`);
