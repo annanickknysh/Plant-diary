@@ -1,6 +1,6 @@
 // Импорт фото: дата и GPS из EXIF, защита от дублей, превью и рабочая копия.
 // Работает в фоне: можно продолжать пользоваться приложением.
-import { parseExif } from '../lib/exif.js';
+import { parseExif, parseExifContainer, dateFromFileName } from '../lib/exif.js';
 import { makeResized, saveImages, THUMB_SIZE, FULL_SIZE } from './images.js';
 import { STORES, get, put } from './db.js';
 import { emit, getSetting, deletedIds, tagPhotos } from './store.js';
@@ -31,6 +31,22 @@ function progress(force = false) {
     lastEmit = now;
     emit('import', { ...importState });
   }
+}
+
+export const isHeicName = (f) => /\.(heic|heif)$/i.test(f.name) || /image\/hei[cf]/.test(f.type || '');
+
+/** Дата и GPS: EXIF из JPEG, из контейнера HEIC, иначе дата из имени файла. */
+async function readMeta(file) {
+  let exif = parseExif(await file.slice(0, 256 * 1024).arrayBuffer());
+  if (!exif.takenAt && isHeicName(file)) {
+    // В HEIC блок EXIF может лежать где угодно — читаем первые 4 МБ
+    exif = parseExifContainer(await file.slice(0, 4 * 1024 * 1024).arrayBuffer());
+  }
+  if (!exif.takenAt) {
+    const t = dateFromFileName(file.name);
+    if (t) exif = { ...exif, takenAt: t, fromName: true };
+  }
+  return exif;
 }
 
 export function isImageFile(f) {
@@ -81,7 +97,7 @@ async function run() {
 }
 
 function describeError(file, e) {
-  if (/\.(heic|heif)$/i.test(file.name)) return 'формат HEIC не открывается в этом браузере';
+  if (isHeicName(file)) return 'не удалось раскрыть фото HEIC';
   if (e?.name === 'QuotaExceededError') return 'не хватает места в хранилище';
   return 'не удалось прочитать изображение';
 }
@@ -96,12 +112,10 @@ async function hashFile(file) {
 const DAY = 24 * 3600 * 1000;
 
 async function importOne(file, quality, deleted, range = null) {
-  let head = null;
   let exif = null;
   if (range) {
     if (file.lastModified && file.lastModified < range.from - DAY) { importState.outOfRange++; return null; }
-    head = await file.slice(0, 256 * 1024).arrayBuffer();
-    exif = parseExif(head);
+    exif = await readMeta(file);
     const t = exif.takenAt || file.lastModified;
     if (t && (t < range.from || t >= range.to)) { importState.outOfRange++; return null; }
   }
@@ -114,10 +128,7 @@ async function importOne(file, quality, deleted, range = null) {
     importState.duplicates++;
     return id;
   }
-  if (!exif) {
-    head = await file.slice(0, 256 * 1024).arrayBuffer();
-    exif = parseExif(head);
-  }
+  if (!exif) exif = await readMeta(file);
   let takenAt = exif.takenAt;
   const dateApprox = !takenAt;
   if (!takenAt) {

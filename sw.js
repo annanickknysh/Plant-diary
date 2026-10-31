@@ -1,6 +1,6 @@
 // Service worker: приложение открывается и работает без интернета.
 // При изменении любых файлов приложения поднимайте VERSION.
-const VERSION = 'v0.6.2';
+const VERSION = 'v0.7.0';
 const CACHE = `plant-diary-${VERSION}`;
 const FILES = [
   './',
@@ -70,9 +70,20 @@ self.addEventListener('activate', (e) => {
   );
 });
 
+// Крупные библиотеки (декодер HEIC) — в отдельном кэше: не скачиваются заново при каждом обновлении,
+// а только при первом использовании. Имя файла содержит версию библиотеки.
+const VENDOR_CACHE = 'pd-vendor-1';
+
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
+  if (new URL(req.url).pathname.includes('/vendor/')) {
+    e.respondWith(caches.open(VENDOR_CACHE).then((c) => c.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).then((res) => {
+      if (res.ok) c.put(req, res.clone());
+      return res;
+    }))));
+    return;
+  }
   e.respondWith(
     caches.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).then((res) => {
       if (res.ok) {

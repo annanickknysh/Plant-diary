@@ -29,6 +29,38 @@ export function parseExif(buf) {
   return empty;
 }
 
+/**
+ * EXIF из HEIC/HEIF (и других контейнеров): ищем блок «Exif\0\0» с заголовком TIFF.
+ * @param {ArrayBuffer} buf — файл целиком или его начало
+ */
+export function parseExifContainer(buf) {
+  const empty = { takenAt: null, lat: null, lon: null };
+  const b = new Uint8Array(buf);
+  const view = new DataView(buf);
+  for (let i = 0; i + 10 < b.length; i++) {
+    if (b[i] !== 0x45 || b[i + 1] !== 0x78 || b[i + 2] !== 0x69 || b[i + 3] !== 0x66 || b[i + 4] !== 0 || b[i + 5] !== 0) continue;
+    const t = i + 6;
+    const ok = (b[t] === 0x4d && b[t + 1] === 0x4d && b[t + 2] === 0 && b[t + 3] === 0x2a)
+      || (b[t] === 0x49 && b[t + 1] === 0x49 && b[t + 2] === 0x2a && b[t + 3] === 0);
+    if (!ok) continue;
+    try {
+      const r = parseTiff(view, t, Math.min(b.length, t + 256 * 1024));
+      if (r.takenAt || r.lat !== null) return r;
+    } catch { /* ищем дальше */ }
+  }
+  return empty;
+}
+
+/** Дата из имени файла: «20240331_125733_IMG_6172.HEIC», «IMG_20240331_125733.jpg», «2024-03-31 12.57.33.jpg». */
+export function dateFromFileName(name) {
+  const m = String(name || '').match(/(?:^|\D)(20\d{2})[-_.]?(\d{2})[-_.]?(\d{2})[ _-]+(\d{2})[-_.:]?(\d{2})[-_.:]?(\d{2})(?:\D|$)/);
+  if (!m) return null;
+  const [y, mo, d, hh, mi, se] = m.slice(1).map(Number);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31 || hh > 23 || mi > 59 || se > 59) return null;
+  const t = new Date(y, mo - 1, d, hh, mi, se).getTime();
+  return t > Date.now() + 86400000 ? null : t;
+}
+
 function readAscii(view, start, n) {
   let s = '';
   for (let i = 0; i < n && start + i < view.byteLength; i++) {

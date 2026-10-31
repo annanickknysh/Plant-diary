@@ -4,9 +4,31 @@ import { tx, promisify, STORES } from './db.js';
 export const THUMB_SIZE = 400;
 export const FULL_SIZE = 1600;
 
+// Декодер HEIC (libheif) — 3 МБ, грузится только когда встретился такой файл.
+let heicLib = null;
+const loadHeic = () => (heicLib ||= import('../../vendor/heic-to-1.6.7.js').catch((e) => { heicLib = null; throw e; }));
+
+/** Похоже ли содержимое на HEIF-контейнер (ftyp heic/mif1/…). */
+async function looksHeif(blob) {
+  const head = new Uint8Array(await blob.slice(4, 12).arrayBuffer());
+  const s = String.fromCharCode(...head);
+  return s.startsWith('ftyp') && /^(heic|heix|hevc|hevx|mif1|msf1|heim|heis)/.test(s.slice(4));
+}
+
+async function decode(file) {
+  try {
+    return await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch (e) {
+    if (!(await looksHeif(file))) throw e;
+    const { heicTo } = await loadHeic();
+    // libheif сам применяет поворот из файла
+    return heicTo({ blob: file, type: 'bitmap' });
+  }
+}
+
 /** Уменьшить изображение. Ориентацию по EXIF браузер применяет сам. */
 export async function makeResized(file, maxSide, quality) {
-  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const bmp = await decode(file);
   try {
     const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
     const w = Math.max(1, Math.round(bmp.width * scale));
