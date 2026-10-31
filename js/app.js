@@ -2,7 +2,7 @@
 import { openDB } from './data/db.js';
 import { loadCatalog, bus, countPhotos } from './data/store.js';
 import { importState } from './data/importer.js';
-import { h, clear, icon, toast } from './ui/dom.js';
+import { h, clear, icon } from './ui/dom.js';
 import { formatNumber } from './lib/format.js';
 import { queueView } from './views/queue.js';
 import { walkView } from './views/walk.js';
@@ -157,14 +157,27 @@ async function start() {
   });
   await render();
 
-  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!hadController) return; // первая установка, обновлять нечего
-      toast('Вышла новая версия приложения', { actionLabel: 'Перезапустить', onAction: () => location.reload(), duration: 20000 });
+      showUpdateBar();
     });
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
+      // Проверять обновление при каждом возвращении в приложение и раз в час
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+      setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
+    }).catch(() => {});
   }
+}
+
+/** Панель «Вышла новая версия» — не исчезает сама, пока не обновят. */
+function showUpdateBar() {
+  if (document.getElementById('update-bar')) return;
+  const bar = h('div', { id: 'update-bar', role: 'status' },
+    h('span', null, 'Вышла новая версия приложения'),
+    h('button', { class: 'btn small primary', type: 'button', onClick: () => location.reload() }, 'Обновить'));
+  document.body.append(bar);
 }
 
 start();

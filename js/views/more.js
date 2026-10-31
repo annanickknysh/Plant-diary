@@ -6,7 +6,25 @@ import { backupCard } from '../ui/backupCard.js';
 import { formatNumber, formatBytes, formatDayShort, plural, PHOTO_FORMS } from '../lib/format.js';
 import { rerender } from '../app.js';
 
-export const APP_VERSION = '0.4.0';
+export const APP_VERSION = '0.4.1';
+
+async function checkUpdates() {
+  const reg = await navigator.serviceWorker?.getRegistration?.();
+  if (!reg) { location.reload(); return; }
+  toast('Проверяю…');
+  try {
+    await reg.update();
+  } catch {
+    toast('Не удалось проверить — нет интернета?');
+    return;
+  }
+  const incoming = reg.installing || reg.waiting;
+  if (!incoming) { toast('У вас последняя версия'); return; }
+  toast('Загружаю новую версию…', { duration: 10000 });
+  const done = () => location.reload();
+  if (incoming.state === 'activated') done();
+  incoming.addEventListener('statechange', () => { if (incoming.state === 'activated') done(); });
+}
 
 export async function moreView() {
   const [counts, gap, quality, estimate, persisted, deleted] = await Promise.all([
@@ -72,7 +90,9 @@ export async function moreView() {
     h('label', { class: 'field', for: 'quality' }, h('span', null, 'Качество копий для полноэкранного просмотра'), qSel)));
 
   page.append(
-  h('p', { class: 'muted center small' }, `Дневник растений · версия ${APP_VERSION}`));
+  h('div', { class: 'version-row' },
+    h('p', { class: 'muted small' }, `Дневник растений · версия ${APP_VERSION}`),
+    h('button', { class: 'btn small', type: 'button', onClick: checkUpdates }, 'Проверить обновления')));
   return page;
 }
 
