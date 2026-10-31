@@ -1,0 +1,11 @@
+{
+  "name": "plant-diary",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Дневник растений: фото по годам, сезонам и клумбам",
+  "scripts": {
+    "test": "node --test tests/unit/*.test.mjs",
+    "serve": "python3 -m http.server 8080"
+  }
+}

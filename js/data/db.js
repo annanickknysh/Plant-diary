@@ -1,0 +1,91 @@
+// Обёртка над IndexedDB. Всё хранится на устройстве.
+
+const DB_NAME = 'plant-diary';
+const VERSION = 1;
+let dbPromise = null;
+
+export const STORES = {
+  photos: 'photos',     // {id(хэш), takenAt, dateApprox, lat, lon, fileName, folder, w, h, size, importedAt, status, placeIds[], plantIds[]}
+  images: 'images',     // ключ `${id}:t` (превью) или `${id}:f` (рабочая копия) → Blob
+  species: 'species',   // {id, name, latin, family, notes}
+  cultivars: 'cultivars', // {id, speciesId, name, notes}
+  places: 'places',     // {id, parentId, name, notes, lat, lon}
+  plants: 'plants',     // {id, speciesId, cultivarId, placeId, plantedAt, status, prevPlantId, coverPhotoId, notes}
+  entries: 'entries',   // записи дневника (этап 3)
+  meta: 'meta',         // настройки и служебное
+};
+
+export function openDB() {
+  if (!dbPromise) {
+    dbPromise = new Promise((resolve, reject) => {
+      const r = indexedDB.open(DB_NAME, VERSION);
+      r.onupgradeneeded = () => {
+        const db = r.result;
+        const photos = db.createObjectStore(STORES.photos, { keyPath: 'id' });
+        photos.createIndex('takenAt', 'takenAt');
+        photos.createIndex('status', 'status');
+        photos.createIndex('placeIds', 'placeIds', { multiEntry: true });
+        photos.createIndex('plantIds', 'plantIds', { multiEntry: true });
+        db.createObjectStore(STORES.images);
+        for (const s of ['species', 'cultivars', 'places', 'plants', 'entries']) {
+          db.createObjectStore(STORES[s], { keyPath: 'id' });
+        }
+        db.createObjectStore(STORES.meta);
+      };
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+      r.onblocked = () => reject(new Error('База занята другой вкладкой приложения. Закройте её и обновите страницу.'));
+    });
+  }
+  return dbPromise;
+}
+
+export function promisify(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+/** Выполнить fn внутри одной транзакции; результат — после её завершения. */
+export async function tx(stores, mode, fn) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction(stores, mode);
+    let result;
+    Promise.resolve()
+      .then(() => fn(t))
+      .then((v) => { result = v; }, (e) => { try { t.abort(); } catch { /* уже завершена */ } reject(e); });
+    t.oncomplete = () => resolve(result);
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error || new Error('Транзакция прервана'));
+  });
+}
+
+export const get = (store, key) => tx([store], 'readonly', (t) => promisify(t.objectStore(store).get(key)));
+export const getAll = (store) => tx([store], 'readonly', (t) => promisify(t.objectStore(store).getAll()));
+export const put = (store, value, key) =>
+  tx([store], 'readwrite', (t) => promisify(key === undefined ? t.objectStore(store).put(value) : t.objectStore(store).put(value, key)));
+export const del = (store, key) => tx([store], 'readwrite', (t) => promisify(t.objectStore(store).delete(key)));
+export const count = (store) => tx([store], 'readonly', (t) => promisify(t.objectStore(store).count()));
+
+export const getAllByIndex = (store, index, key) =>
+  tx([store], 'readonly', (t) => promisify(t.objectStore(store).index(index).getAll(key)));
+export const countByIndex = (store, index, key) =>
+  tx([store], 'readonly', (t) => promisify(t.objectStore(store).index(index).count(key)));
+
+/** Изменить несколько фото в одной транзакции. mutate(photo) меняет объект на месте. */
+export function updatePhotos(ids, mutate) {
+  return tx([STORES.photos], 'readwrite', async (t) => {
+    const s = t.objectStore(STORES.photos);
+    const changed = [];
+    for (const id of ids) {
+      const p = await promisify(s.get(id));
+      if (!p) continue;
+      mutate(p);
+      s.put(p);
+      changed.push(p);
+    }
+    return changed;
+  });
+}
