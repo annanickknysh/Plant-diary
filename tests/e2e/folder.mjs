@@ -29,7 +29,7 @@ await sheet.getByLabel('С').fill('2025-01-01');
 await sheet.getByLabel('По').fill('2025-12-31');
 await sheet.getByLabel('По').dispatchEvent('change');
 const est = await sheet.locator('p.muted').first().textContent();
-await check(est.startsWith('Примерно 7 фото из 15'), `оценка по датам файлов: ${est}`);
+await check(est.startsWith('Не больше 12 из 15'), `оценка по датам файлов: ${est}`);
 await page.screenshot({ path: `${SHOTS}-sheet.png` });
 await sheet.getByRole('button', { name: 'Добавить фото за период' }).click();
 await page.getByText('Импорт завершён').waitFor({ timeout: 60000 });
@@ -51,6 +51,25 @@ await page.waitForTimeout(500);
 await page.getByText('Импорт завершён').waitFor({ timeout: 60000 });
 const banner2 = await page.locator('#import-banner').textContent();
 await check(banner2.includes('добавлено 5'), `добавлены 5 фото 2026 года, 2025-10-02 уже был: ${banner2}`);
+
+// Третий раз: много файлов через «Добавить фото» (скопированные — дата файла сегодняшняя) → «Все выбранные» без фильтра
+await page.evaluate(async () => {
+  const { tx, STORES } = await import('/js/data/db.js');
+  await tx([STORES.photos, STORES.images], 'readwrite', (t) => { t.objectStore(STORES.photos).clear(); t.objectStore(STORES.images).clear(); });
+});
+const { readdirSync, readFileSync } = await import('node:fs');
+const payload = readdirSync(process.env.FOLDER).map((n) => ({ name: n, mimeType: 'image/jpeg', buffer: readFileSync(`${process.env.FOLDER}/${n}`) }));
+const many = [];
+for (let k = 0; k < 3; k++) payload.forEach((f) => many.push({ ...f, name: `${k}_${f.name}`, buffer: Buffer.concat([f.buffer, Buffer.from([k])]) }));
+await page.locator('input[type=file]:not([webkitdirectory])').first().setInputFiles(many);
+await page.getByRole('heading', { name: 'Какие фото добавить' }).waitFor();
+const p3 = await sheet.locator('.pill[aria-pressed=true]').textContent();
+await check(p3 === 'Все выбранные', `для выбранных файлов по умолчанию — все: ${p3}`);
+await sheet.getByRole('button', { name: /^Добавить 45 фото/ }).click();
+await page.waitForTimeout(500);
+await page.getByText('Импорт завершён').waitFor({ timeout: 90000 });
+const banner3 = await page.locator('#import-banner').textContent();
+await check(banner3.includes('добавлено 45') && !banner3.includes('вне периода'), `все 45 добавлены, ничего не отсечено: ${banner3}`);
 
 await check(!errors.length, `без ошибок ${errors.join('; ')}`);
 await browser.close();

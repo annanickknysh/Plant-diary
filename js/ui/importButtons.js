@@ -22,7 +22,7 @@ function latestPhotoTime() {
 }
 
 /** Панель «Какие фото из папки добавить». */
-export async function openRangeSheet(fileList) {
+export async function openRangeSheet(fileList, { fromFolder = true } = {}) {
   const images = [...fileList].filter(isImageFile);
   if (!images.length) { importFiles(fileList); return; }
   const times = images.map((f) => f.lastModified || 0).filter(Boolean);
@@ -34,13 +34,15 @@ export async function openRangeSheet(fileList) {
 
   const presets = [
     latest ? { key: 'new', label: `Новее ${formatDate(latest)}`, hint: 'после последнего фото в дневнике', from: dayStart(latest), to: Math.max(maxT, today) + DAY } : null,
-    { key: 'all', label: 'Всю папку', from: dayStart(minT), to: dayStart(maxT) + DAY },
+    // «Всё» — без фильтра: у скопированных фото дата файла — день копирования, а не съёмки
+    { key: 'all', label: fromFolder ? 'Всю папку' : 'Все выбранные', all: true, from: dayStart(minT), to: dayStart(maxT) + DAY },
     { key: 'month', label: 'Последний месяц', from: today - 30 * DAY, to: today + DAY },
     { key: 'year', label: `${new Date().getFullYear()} год`, from: new Date(new Date().getFullYear(), 0, 1).getTime(), to: today + DAY },
   ].filter(Boolean);
 
   openSheet((close) => {
-    let range = { from: presets[0].from, to: presets[0].to };
+    const first = fromFolder ? presets[0] : presets.find((p) => p.all);
+    let range = { from: first.from, to: first.to, all: !!first.all };
     const fromEl = h('input', { type: 'date', 'aria-label': 'С' });
     const toEl = h('input', { type: 'date', 'aria-label': 'По' });
     const estimate = h('p', { class: 'muted' });
@@ -52,11 +54,17 @@ export async function openRangeSheet(fileList) {
       toEl.value = toInput(range.to - DAY);
       pills.replaceChildren(...presets.map((p) => h('button', {
         class: 'pill', type: 'button', 'aria-pressed': String(p.key === presetKey),
-        onClick: () => { range = { from: p.from, to: p.to }; sync(p.key); },
+        onClick: () => { range = { from: p.from, to: p.to, all: !!p.all }; sync(p.key); },
       }, p.label)));
       // Оценка по дате файла: точная дата снимка читается из EXIF уже при импорте
-      const n = images.filter((f) => !f.lastModified || (f.lastModified >= range.from && f.lastModified < range.to)).length;
-      estimate.textContent = `Примерно ${formatNumber(n)} ${plural(n, PHOTO_FORMS)} из ${formatNumber(images.length)} за этот период. Точную дату снимка приложение проверит при импорте.`;
+      if (range.all) {
+        estimate.textContent = `Будут добавлены все ${formatNumber(images.length)} ${plural(images.length, PHOTO_FORMS)}.`;
+        go.textContent = `Добавить ${formatNumber(images.length)} ${plural(images.length, PHOTO_FORMS)}`;
+        go.disabled = false;
+        return;
+      }
+      const n = images.filter((f) => !f.lastModified || (f.lastModified >= range.from - DAY)).length;
+      estimate.textContent = `Не больше ${formatNumber(n)} из ${formatNumber(images.length)} — точную дату съёмки приложение проверит при импорте и пропустит фото вне периода.`;
       go.textContent = 'Добавить фото за период';
       go.disabled = range.from >= range.to;
     };
@@ -67,8 +75,8 @@ export async function openRangeSheet(fileList) {
     };
     fromEl.addEventListener('change', onDates);
     toEl.addEventListener('change', onDates);
-    go.addEventListener('click', () => { close(); importFiles(images, { range }); });
-    sync(presets[0].key);
+    go.addEventListener('click', () => { close(); importFiles(images, range.all ? {} : { range: { from: range.from, to: range.to } }); });
+    sync(first.key);
 
     return h('div', { class: 'form range-sheet' },
       h('h2', { class: 'sheet-title' }, 'Какие фото добавить'),
@@ -85,7 +93,12 @@ export async function openRangeSheet(fileList) {
 
 export function importButtons({ compact = false } = {}) {
   const files = h('input', { type: 'file', multiple: true, accept: 'image/*', class: 'visually-hidden', tabindex: '-1', 'aria-hidden': 'true' });
-  files.addEventListener('change', () => { if (files.files.length) importFiles(files.files); files.value = ''; });
+  files.addEventListener('change', () => {
+    const list = [...files.files];
+    files.value = '';
+    if (list.length > 30) openRangeSheet(list, { fromFolder: false });
+    else if (list.length) importFiles(list);
+  });
   const wrap = h('div', { class: `import-buttons${compact ? ' compact' : ''}` }, files,
     h('button', { class: 'btn primary', type: 'button', onClick: () => files.click() }, icon('image', 20), 'Добавить фото'));
   if (supportsFolders()) {
