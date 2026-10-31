@@ -121,6 +121,7 @@ body.fullscreen-route #view { padding-bottom: 0; }
 .pill {
   display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 14px; border-radius: 18px;
   border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 600; cursor: pointer;
+  text-decoration: none;
 }
 .pill[aria-pressed="true"] { background: var(--dark-btn); border-color: var(--dark-btn); color: var(--bg); }
 .pill.warn { color: var(--warn-text); }
@@ -282,3 +283,51 @@ body.fullscreen-route #toast.show { transform: translate(-50%, 0); }
 .toast-action { flex-shrink: 0; border: none; background: transparent; color: #9DD3A8; font-weight: 800; min-height: 36px; padding: 0 8px; cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ---------- сетка сезонов ---------- */
+.view-links { display: flex; gap: 10px; flex-wrap: wrap; }
+.view-links .btn { flex: 1 1 150px; }
+.chips-row.years { align-items: center; }
+.pick-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 38px; }
+.grid-scroll { overflow-x: auto; margin: 0 -16px; padding: 0 16px 4px; -webkit-overflow-scrolling: touch; }
+.season-grid { display: grid; gap: 6px; align-items: center; }
+.season-grid.months { min-width: 740px; }
+.col-head { border: none; background: transparent; color: var(--ink); font-weight: 700; font-size: 13px; padding: 6px 0; cursor: pointer; border-radius: 8px; min-height: 36px; }
+.col-head.on { background: var(--accent-soft); color: var(--accent-text); }
+.row-year { font-size: 13px; font-weight: 800; color: var(--muted); }
+.cell {
+  position: relative; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600; color: var(--muted); text-align: center; padding: 0;
+}
+.season-grid.single .cell { aspect-ratio: 4 / 3; }
+.cell.tall { aspect-ratio: 1 / 1; }
+.cell.photos { border: 3px solid transparent; background: var(--surface-2); cursor: pointer; }
+.cell.photos img { width: 100%; height: 100%; object-fit: cover; }
+.cell.photos.picked { border-color: var(--warm); }
+.cell.empty { border: 1.5px dashed var(--line-strong); }
+.cell.future { background: var(--surface-2); }
+.cell-count { position: absolute; right: 4px; bottom: 4px; background: rgba(20, 28, 22, 0.75); color: #fff; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 1px 6px; }
+.compare-table { display: grid; gap: 8px; min-width: min-content; }
+.cmp-head { display: flex; flex-direction: column; text-decoration: none; color: var(--ink); padding: 4px 2px; }
+.cmp-period { font-size: 12px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
+.chip.split { padding: 0 4px 0 12px; gap: 2px; }
+.chip.split a { color: inherit; text-decoration: none; min-height: 36px; display: inline-flex; align-items: center; }
+.chip-edit { border: none; background: transparent; color: inherit; width: 32px; height: 32px; border-radius: 16px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.viewer-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- сравнение двух фото ---------- */
+.segmented.dark { background: rgba(255, 255, 255, 0.1); min-width: 220px; }
+.segmented.dark > button { color: #C9D2CB; }
+.segmented.dark > [aria-pressed="true"] { background: rgba(255, 255, 255, 0.92); color: #111; }
+.compare-body { flex: 1; min-height: 0; display: flex; gap: 8px; padding: 8px; }
+.compare-body.side { flex-direction: column; }
+@media (min-aspect-ratio: 1/1) { .compare-body.side { flex-direction: row; } }
+.compare-body figure { margin: 0; flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.compare-body figure img { flex: 1; min-height: 0; width: 100%; object-fit: contain; }
+.compare-body figcaption { font-size: 13px; color: #C9D2CB; text-align: center; }
+.compare-body.slider { flex-direction: column; align-items: center; padding-bottom: calc(16px + var(--safe-b)); }
+.cmp-frame { position: relative; flex: 1; min-height: 0; width: 100%; touch-action: none; cursor: ew-resize; }
+.cmp-frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.cmp-handle { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; box-shadow: 0 0 6px rgba(0, 0, 0, 0.6); transform: translateX(-1px); pointer-events: none; }
+.compare-body input[type=range] { width: min(100%, 520px); accent-color: #9DD3A8; min-height: 32px; }
+.cmp-captions { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: #C9D2CB; text-align: center; }

@@ -4,7 +4,11 @@ import { formatDate, formatTime } from '../lib/format.js';
 import { catalog, plantName, placePath, setPhotoTags, getPhoto, tagPhotos } from '../data/store.js';
 import { openTagSheet } from './tagSheet.js';
 
-export function openViewer(photos, index, { onChange } = {}) {
+/**
+ * @param opts.onChange — вызвать после правки отметок
+ * @param opts.actions — дополнительные кнопки [{label, onClick(photo)}]
+ */
+export function openViewer(photos, index, { onChange, actions = [] } = {}) {
   let i = index;
   const prevFocus = document.activeElement;
   const overlay = h('div', { class: 'viewer', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Просмотр фото' });
@@ -44,7 +48,9 @@ export function openViewer(photos, index, { onChange } = {}) {
         h('button', { class: 'chip-x', type: 'button', 'aria-label': 'Убрать отметку растения', onClick: () => removeTag('plant', id) }, '×')));
     }
     if (!p.placeIds.length && !p.plantIds.length) chips.append(h('span', { class: 'muted' }, p.status === 'hidden' ? 'Скрыто: «не растение»' : 'Без отметок'));
-    info.append(chips, h('button', { class: 'btn small', type: 'button', onClick: addTag }, icon('plus', 18), 'Отметить'));
+    info.append(chips, h('div', { class: 'viewer-actions' },
+      h('button', { class: 'btn small', type: 'button', onClick: addTag }, icon('plus', 18), 'Отметить'),
+      actions.map((a) => h('button', { class: 'btn small', type: 'button', onClick: () => a.onClick(photos[i]) }, a.label))));
     if (p.fileName) info.append(h('div', { class: 'viewer-file' }, p.folder ? `${p.folder}/${p.fileName}` : p.fileName));
   };
 

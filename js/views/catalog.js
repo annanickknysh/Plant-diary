@@ -3,6 +3,7 @@ import { h, icon, photoImg, formSheet, toast, confirmAction } from '../ui/dom.js
 import {
   catalog, photosByStatus, photosOfPlant, photosOfPlace, plantName, varietyName, placePath, parentPath, placeDepth,
   createSpecies, createCultivar, createPlace, createPlant, updateEntity, deleteEntity, deleteBlocker, speciesName,
+  plantsOfTarget, comparableVariety,
 } from '../data/store.js';
 import { monthGroupedGrid } from '../ui/photoGrid.js';
 import { formatNumber, plural, PHOTO_FORMS, PLANT_FORMS, formatDate } from '../lib/format.js';
@@ -156,6 +157,7 @@ export async function speciesView(id) {
     h('p', { class: 'muted' }, [sp.latin && h('i', null, sp.latin), sp.family].filter(Boolean).flatMap((x, i) => (i ? [' · ', x] : [x])))),
   entityActions('species', sp, () => speciesForm(sp), '#/catalog/plants'));
   if (sp.notes) page.append(h('p', { class: 'notes' }, sp.notes));
+  page.append(viewLinks('species', id, plantsOfTarget('species', id).length > 1 ? { kind: 'species', id } : null));
 
   const cultivars = [...catalog.cultivars.values()].filter((c) => c.speciesId === id).sort(byName);
   const plants = [...catalog.plants.values()].filter((p) => p.speciesId === id);
@@ -163,7 +165,9 @@ export async function speciesView(id) {
   const chips = h('div', { class: 'chips' });
   for (const c of cultivars) {
     const n = plants.filter((p) => p.cultivarId === c.id).length;
-    chips.append(h('button', { class: 'chip big', type: 'button', onClick: () => cultivarForm(sp, c) }, `${c.name} · ${n}`));
+    chips.append(h('span', { class: 'chip big split' },
+      h('a', { href: `#/grid/cultivar/${c.id}`, title: 'Сетка сезонов сорта' }, `${c.name} · ${n}`),
+      h('button', { class: 'chip-edit', type: 'button', 'aria-label': `Изменить сорт ${c.name}`, onClick: () => cultivarForm(sp, c) }, icon('edit', 15))));
   }
   chips.append(h('button', { class: 'chip big dashed', type: 'button', onClick: () => cultivarForm(sp, null) }, '+ сорт'));
   page.append(chips);
@@ -191,6 +195,7 @@ export async function placeView(id) {
     h('p', { class: 'muted' }, [parentPath(id), typeof place.lat === 'number' ? 'есть точка GPS' : null].filter(Boolean).join(' · '))),
   entityActions('places', place, () => placeForm(place), place.parentId ? `#/place/${place.parentId}` : '#/catalog/places'));
   if (place.notes) page.append(h('p', { class: 'notes' }, place.notes));
+  page.append(viewLinks('place', id, null));
 
   const children = [...catalog.places.values()].filter((p) => p.parentId === id).sort(byName);
   if (children.length) {
@@ -234,12 +239,30 @@ export async function plantView(id) {
     const last = Math.max(...photos.map((p) => p.takenAt));
     page.append(h('p', { class: 'muted' }, `${formatNumber(photos.length)} ${plural(photos.length, PHOTO_FORMS)} · с ${formatDate(first)} по ${formatDate(last)}`));
   }
-  page.append(h('p', { class: 'soon-note' }, 'Сетка сезонов и сравнение клумб для этого растения появятся в следующей версии.'));
-  page.append(monthGroupedGrid(photos, { emptyText: 'Фото этого растения пока нет. Отметьте их на экране «Разбор».' }));
+  page.append(viewLinks('plant', id, comparableVariety(plant)));
+  const years = [...new Set(photos.map((p) => new Date(p.takenAt).getFullYear()))].sort((a, b) => b - a);
+  let year = plantYear.get(id) ?? null;
+  if (year !== null && !years.includes(year)) year = null;
+  if (years.length > 1) {
+    page.append(h('div', { class: 'chips-row' },
+      h('button', { class: 'pill', type: 'button', 'aria-pressed': String(year === null), onClick: () => { plantYear.delete(id); rerender(); } }, 'Все годы'),
+      years.map((y) => h('button', { class: 'pill', type: 'button', 'aria-pressed': String(year === y), onClick: () => { plantYear.set(id, y); rerender(); } }, String(y)))));
+  }
+  const shown = year === null ? photos : photos.filter((p) => new Date(p.takenAt).getFullYear() === year);
+  page.append(monthGroupedGrid(shown, { emptyText: 'Фото этого растения пока нет. Отметьте их на экране «Разбор».' }));
   return page;
 }
 
 // ================= общие части =================
+
+const plantYear = new Map();
+
+/** Ссылки на сетку сезонов и сравнение клумб. */
+function viewLinks(kind, id, variety) {
+  return h('div', { class: 'view-links' },
+    h('a', { class: 'btn primary', href: `#/grid/${kind}/${id}` }, icon('grid', 20), 'Сетка сезонов'),
+    variety ? h('a', { class: 'btn', href: `#/compare/${variety.kind}/${variety.id}` }, 'Сравнить клумбы') : null);
+}
 
 function notFound(page) {
   page.append(h('section', { class: 'empty' }, h('h2', null, 'Не найдено'), h('p', null, 'Возможно, запись была удалена.')));

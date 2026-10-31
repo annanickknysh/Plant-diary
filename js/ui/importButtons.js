@@ -8,7 +8,7 @@ const supportsFolders = () => {
 };
 
 export function importButtons({ compact = false } = {}) {
-  const files = h('input', { type: 'file', multiple: true, accept: 'image/*,.heic,.heif', class: 'visually-hidden', tabindex: '-1', 'aria-hidden': 'true' });
+  const files = h('input', { type: 'file', multiple: true, accept: 'image/*', class: 'visually-hidden', tabindex: '-1', 'aria-hidden': 'true' });
   files.addEventListener('change', () => { if (files.files.length) importFiles(files.files); files.value = ''; });
   const wrap = h('div', { class: `import-buttons${compact ? ' compact' : ''}` }, files,
     h('button', { class: 'btn primary', type: 'button', onClick: () => files.click() }, icon('image', 20), 'Добавить фото'));

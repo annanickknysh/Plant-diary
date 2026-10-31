@@ -251,3 +251,86 @@ export function countPhotos() {
     return { total, fresh, hidden, tagged: total - fresh - hidden };
   });
 }
+
+// ---------- объекты для сеток и сравнений ----------
+// Объект просмотра: растение (plant), сорт (cultivar), вид (species) или место (place).
+
+export function plantsOfTarget(kind, id) {
+  const plants = [...catalog.plants.values()];
+  if (kind === 'plant') return plants.filter((p) => p.id === id);
+  if (kind === 'cultivar') return plants.filter((p) => p.cultivarId === id);
+  if (kind === 'species') return plants.filter((p) => p.speciesId === id);
+  return [];
+}
+
+/** Место и все вложенные в него места. */
+export function placeWithDescendants(id) {
+  const out = [id];
+  for (let i = 0; i < out.length && i < 500; i++) {
+    for (const p of catalog.places.values()) if (p.parentId === out[i]) out.push(p.id);
+  }
+  return out;
+}
+
+export async function photosForTarget(kind, id) {
+  const lists = kind === 'place'
+    ? await Promise.all(placeWithDescendants(id).map((pid) => getAllByIndex(STORES.photos, 'placeIds', pid)))
+    : await Promise.all(plantsOfTarget(kind, id).map((p) => getAllByIndex(STORES.photos, 'plantIds', p.id)));
+  const seen = new Map();
+  for (const list of lists) for (const p of list) if (p.status !== 'hidden') seen.set(p.id, p);
+  return [...seen.values()];
+}
+
+export function targetExists(kind, id) {
+  const map = { plant: catalog.plants, cultivar: catalog.cultivars, species: catalog.species, place: catalog.places }[kind];
+  return !!map?.has(id);
+}
+
+export function targetName(kind, id) {
+  if (kind === 'plant') return varietyName(catalog.plants.get(id));
+  if (kind === 'cultivar') {
+    const c = catalog.cultivars.get(id);
+    return c ? `${speciesName(c.speciesId)} «${c.name}»` : 'Сорт';
+  }
+  if (kind === 'species') return speciesName(id);
+  if (kind === 'place') return catalog.places.get(id)?.name ?? 'Место';
+  return '';
+}
+
+export function targetSubtitle(kind, id) {
+  if (kind === 'plant') return placePath(catalog.plants.get(id)?.placeId);
+  if (kind === 'cultivar' || kind === 'species') {
+    const n = plantsOfTarget(kind, id).length;
+    return n === 1 ? 'одно растение' : `все растения: ${n}`;
+  }
+  if (kind === 'place') return parentPath(id) || 'место';
+  return '';
+}
+
+/** Сорт или вид растения, если он растёт больше чем в одном месте — для сравнения клумб. */
+export function comparableVariety(plant) {
+  if (!plant) return null;
+  if (plant.cultivarId && plantsOfTarget('cultivar', plant.cultivarId).length > 1) return { kind: 'cultivar', id: plant.cultivarId };
+  if (plantsOfTarget('species', plant.speciesId).length > 1) return { kind: 'species', id: plant.speciesId };
+  return null;
+}
+
+export async function getPins() {
+  return (await get(STORES.meta, 'coverPins')) || {};
+}
+
+export async function setPin(key, photoId) {
+  const pins = await getPins();
+  if (photoId) pins[key] = photoId;
+  else delete pins[key];
+  await put(STORES.meta, pins, 'coverPins');
+}
+
+export async function rememberTarget(kind, id) {
+  const cur = ((await get(STORES.meta, 'recentTargets')) || []).filter((t) => !(t.kind === kind && t.id === id));
+  await put(STORES.meta, [{ kind, id }, ...cur].slice(0, 6), 'recentTargets');
+}
+
+export async function recentTargets() {
+  return ((await get(STORES.meta, 'recentTargets')) || []).filter((t) => targetExists(t.kind, t.id));
+}

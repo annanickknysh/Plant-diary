@@ -2,13 +2,14 @@
 import { openDB } from './data/db.js';
 import { loadCatalog, bus, countPhotos } from './data/store.js';
 import { importState } from './data/importer.js';
-import { h, clear, icon } from './ui/dom.js';
+import { h, clear, icon, toast } from './ui/dom.js';
 import { formatNumber } from './lib/format.js';
 import { queueView } from './views/queue.js';
 import { walkView } from './views/walk.js';
 import { catalogView, speciesView, placeView, plantView } from './views/catalog.js';
 import { moreView, hiddenView } from './views/more.js';
 import { soonView } from './views/soon.js';
+import { seasonsHome, gridView, compareView } from './views/seasons.js';
 
 const routes = [
   { re: /^\/queue$/, view: queueView, tab: 'queue' },
@@ -17,7 +18,9 @@ const routes = [
   { re: /^\/species\/([\w-]+)$/, view: speciesView, tab: 'catalog' },
   { re: /^\/place\/([\w-]+)$/, view: placeView, tab: 'catalog' },
   { re: /^\/plant\/([\w-]+)$/, view: plantView, tab: 'catalog' },
-  { re: /^\/seasons$/, view: () => soonView('seasons'), tab: 'seasons' },
+  { re: /^\/seasons$/, view: seasonsHome, tab: 'seasons' },
+  { re: /^\/grid\/(plant|cultivar|species|place)\/([\w-]+)$/, view: gridView, tab: 'seasons' },
+  { re: /^\/compare\/(cultivar|species)\/([\w-]+)$/, view: compareView, tab: 'seasons' },
   { re: /^\/camera$/, view: () => soonView('camera'), tab: 'camera' },
   { re: /^\/more$/, view: moreView, tab: 'more' },
   { re: /^\/hidden$/, view: hiddenView, tab: 'more' },
@@ -149,6 +152,11 @@ async function start() {
   await render();
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController) return; // первая установка, обновлять нечего
+      toast('Вышла новая версия приложения', { actionLabel: 'Перезапустить', onAction: () => location.reload(), duration: 20000 });
+    });
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
 }
