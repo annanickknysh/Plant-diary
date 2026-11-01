@@ -2,7 +2,7 @@
 import { h, icon, photoImg, toast, clear } from '../ui/dom.js';
 import {
   catalog, photosForTarget, plantsOfTarget, targetName, targetSubtitle, targetExists, comparableVariety,
-  getPins, setPin, rememberTarget, recentTargets, varietyName, placePath, photosByStatus,
+  getPins, setPin, rememberTarget, varietyName, placePath, photosByStatus,
 } from '../data/store.js';
 import { buildGrid, buildComparison } from '../lib/periods.js';
 import { seasonOf } from '../lib/seasons.js';
@@ -21,7 +21,7 @@ const homeUi = { query: '', tab: 'places', open: new Set() };
 // ======================= выбор объекта =======================
 
 export async function seasonsHome() {
-  const [tagged, recent] = await Promise.all([photosByStatus('tagged'), recentTargets()]);
+  const tagged = await photosByStatus('tagged');
   // Счётчики фото: по растению, сорту, виду и по месту вместе со всем, что внутри него
   const count = { plant: new Map(), cultivar: new Map(), species: new Map(), place: new Map() };
   const cover = new Map();
@@ -140,11 +140,6 @@ export async function seasonsHome() {
       found.forEach(([k, id]) => body.append(row(k, id)));
       if (!found.length) body.append(h('p', { class: 'muted empty-note' }, 'Ничего не нашлось.'));
       return;
-    }
-    if (recent.length) {
-      body.append(h('h3', { class: 'eyebrow' }, 'Недавно смотрели'));
-      for (const t of recent.slice(0, 4)) body.append(row(t.kind, t.id));
-      body.append(h('h3', { class: 'eyebrow' }, homeUi.tab === 'places' ? 'Все места' : 'Все растения'));
     }
     if (homeUi.tab === 'places') drawPlaces();
     else drawPlants();
