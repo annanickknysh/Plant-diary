@@ -481,3 +481,11 @@ body.fullscreen-route #view { padding-bottom: 0; }
 .pair-strip .thumb[aria-pressed="true"] { outline: 3px solid #9CCB9F; outline-offset: -3px; }
 .pair-manual .btn { margin-top: 8px; }
 .cmp-back { background: transparent; color: #fff; border-color: rgba(255, 255, 255, 0.3); display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.cmp-vote { display: flex; align-items: center; gap: 4px; padding: 6px 12px calc(10px + var(--safe-b)); background: #0B0F0C; color: #DDE5DE; font-size: 14px; }
+.cmp-vote span { flex: 1; }
+.pair-manual .row-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.pair-manual .row-buttons .btn { flex: 1; }
+.pair-manual .row-buttons .btn:not(.primary) { background: transparent; color: #fff; border-color: rgba(255, 255, 255, 0.3); display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.compare .viewer-top { gap: 6px; padding-left: 8px; }
+.compare .viewer-top .segmented { flex: 1; min-width: 0; }
+.cmp-back { padding: 0 10px 0 6px; }

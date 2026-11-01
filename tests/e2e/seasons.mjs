@@ -113,6 +113,21 @@ await page.getByText(/Обложка для «май 2026» закреплена
 await check(true, 'обложка периода закреплена');
 await page.keyboard.press('Escape');
 
+// Прокрутка сетки месяцев не сбрасывается при выборе ячейки
+await page.locator('.col-head.on').click(); // вернуть все столбцы
+await page.getByRole('button', { name: 'Месяцы', exact: true }).click();
+await page.waitForTimeout(300);
+await page.getByRole('button', { name: 'Сравнить два периода' }).click();
+await page.waitForTimeout(300);
+await page.locator('.grid-scroll').evaluate((el) => { el.scrollLeft = el.scrollWidth; });
+const sx = await page.locator('.grid-scroll').evaluate((el) => el.scrollLeft);
+await page.locator('.cell.photos').last().click();
+await page.waitForTimeout(300);
+const sx2 = await page.locator('.grid-scroll').evaluate((el) => el.scrollLeft);
+await check(sx > 0 && Math.abs(sx2 - sx) < 2, `прокрутка сетки сохраняется при выборе (${sx} → ${sx2})`);
+await page.getByRole('button', { name: 'Отмена' }).click();
+await page.getByRole('button', { name: 'Сезоны', exact: true }).click();
+
 // Сравнение двух периодов
 await page.getByRole('button', { name: 'Сравнить два периода' }).click();
 await page.locator('.cell.photos').nth(0).click();
@@ -131,24 +146,37 @@ const votes = await page.evaluate(async () => (await (await import('/js/data/vie
 await check(votes === 1, 'оценка сохранена');
 await page.locator('.pair-row').first().getByRole('button', { name: 'Плохая пара' }).click();
 await page.locator('.pair-row').first().getByRole('button', { name: 'Хорошая пара' }).click();
-await check((await page.locator('.pair-row').first().textContent()).includes('хорошая пара'), '👍 отмечает пару');
+await check((await page.locator('.pair-row').first().textContent()).includes('закреплена'), '👍 отмечает пару');
 await page.locator('.pair-thumbs').first().click();
 await page.locator('.compare-body.side img').first().waitFor();
 await page.waitForTimeout(300);
 await shot('compare-side');
+await check((await page.locator('.cmp-vote').textContent()).includes('закреплена'), 'в сравнении видна оценка пары');
+await page.locator('.cmp-vote').getByRole('button', { name: 'Хорошая пара' }).click();
+await page.waitForTimeout(200);
+await check((await page.locator('.cmp-vote').textContent()).includes('Удачная пара?'), '👍 в сравнении снимается повторным нажатием');
+await page.locator('.cmp-vote').getByRole('button', { name: 'Хорошая пара' }).click();
 await page.getByRole('button', { name: 'Шторка' }).click();
 await page.locator('.cmp-frame').waitFor();
 await page.waitForTimeout(300);
 await shot('compare-slider');
 await check(true, 'сравнение двух фото: рядом и шторкой');
-await page.getByRole('button', { name: 'Другая пара' }).click();
+await page.getByRole('button', { name: 'Пары', exact: true }).click();
 await check(await page.locator('.compare').count() === 0 && await page.locator('.pairs').count() === 1, '«Другая пара» возвращает к выбору пар');
 await page.locator('.pair-manual summary').click();
 await page.locator('.pair-side').nth(0).locator('.thumb').first().click();
 await page.locator('.pair-side').nth(1).locator('.thumb').last().click();
-await page.getByRole('button', { name: 'Сравнить выбранные' }).click();
+await page.locator('.pair-manual').getByRole('button', { name: 'Сравнить', exact: true }).click();
 await page.locator('.compare-body img').first().waitFor();
 await check(true, 'пару можно выбрать вручную');
+await page.getByRole('button', { name: 'Пары', exact: true }).click();
+await page.locator('.pair-side').nth(0).locator('.thumb').first().click();
+await page.locator('.pair-side').nth(1).locator('.thumb').last().click();
+await page.getByRole('button', { name: 'Закрепить в подсказках' }).click();
+await page.waitForTimeout(300);
+await check((await page.locator('.pair-row').first().textContent()).includes('закреплена'), 'ручная пара закреплена первой в подсказках');
+await page.locator('.pair-thumbs').first().click();
+await page.locator('.compare-body img').first().waitFor();
 await page.locator('.compare').getByRole('button', { name: 'Закрыть' }).click();
 await check(await page.locator('.compare, .pairs').count() === 0, 'крестик закрывает сравнение целиком');
 

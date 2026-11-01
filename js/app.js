@@ -94,8 +94,11 @@ async function render() {
 /** Перерисовать текущий экран, сохранив прокрутку. */
 export async function rerender() {
   const y = window.scrollY;
+  // Горизонтальная прокрутка широких таблиц (месяцы, сравнение клумб) — чтобы октябрь не убегал
+  const xs = [...viewHost.querySelectorAll('.grid-scroll')].map((el) => el.scrollLeft);
   await render();
   window.scrollTo(0, y);
+  viewHost.querySelectorAll('.grid-scroll').forEach((el, i) => { if (xs[i]) el.scrollLeft = xs[i]; });
 }
 
 function updateBanner(st) {

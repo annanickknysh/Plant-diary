@@ -56,3 +56,14 @@ test('веса подстраиваются по оценкам', async () => {
   const w = fitViewWeights(votes);
   assert.ok(w.tex > 0.5, JSON.stringify(w));
 });
+
+test('совпадение растений поднимает пару', async () => {
+  const { bestPairs: bp, plantOverlap } = await import('../../js/lib/features.js');
+  assert.equal(plantOverlap(['p1', 'p2'], ['p2']), 0.5);
+  assert.equal(plantOverlap([], ['p1']), 0);
+  const f = scene({ house: 'left' });
+  // Два одинаковых по виду кадра во втором периоде — выигрывает тот, где те же растения
+  const A = [{ id: 'a', f, plants: ['rose'] }];
+  const B = [{ id: 'b-other', f, plants: ['hosta'] }, { id: 'b-same', f, plants: ['rose'] }];
+  assert.equal(bp(A, B)[0].b, 'b-same');
+});

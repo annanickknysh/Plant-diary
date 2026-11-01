@@ -198,9 +198,18 @@ export function viewParts(a, b) {
   };
 }
 
-export const DEFAULT_VIEW_WEIGHTS = { lum: 0.33, tex: 0.27, full: 0.4 };
+export const DEFAULT_VIEW_WEIGHTS = { lum: 0.28, tex: 0.22, full: 0.3, plants: 0.2 };
 
-export const viewScore = (parts, w = DEFAULT_VIEW_WEIGHTS) => w.lum * parts.lum + w.tex * parts.tex + w.full * parts.full;
+export const viewScore = (parts, w = DEFAULT_VIEW_WEIGHTS) =>
+  w.lum * parts.lum + w.tex * parts.tex + w.full * parts.full + (w.plants || 0) * (parts.plants || 0);
+
+/** Доля общих растений на двух фото (0 — ничего общего или растения не отмечены, 1 — те же самые). */
+export function plantOverlap(a = [], b = []) {
+  if (!a.length || !b.length) return 0;
+  const sa = new Set(a);
+  const common = b.filter((x) => sa.has(x)).length;
+  return common / new Set([...a, ...b]).size;
+}
 
 /** Похожесть ракурса двух фото без учёта цвета: от −1 до 1 (обычно 0,3–0,98). */
 export function viewSimilarity(a, b) {
@@ -210,7 +219,7 @@ export function viewSimilarity(a, b) {
 
 /**
  * Пары самых похожих ракурсов из двух наборов: каждое фото — не больше чем в одной паре.
- * @param A, B — [{id, f}]
+ * @param A, B — [{id, f, plants?: id растений (или сортов) на фото}]
  * @param opts.weights — веса составляющих (подстраиваются по оценкам)
  * @param opts.liked, opts.disliked — Set ключей `${idA}|${idB}` (порядок не важен)
  * @returns [{a, b, score, parts, liked}] — по убыванию похожести
@@ -222,7 +231,7 @@ export function bestPairs(A, B, limit = 6, { weights = DEFAULT_VIEW_WEIGHTS, lik
     for (const y of B) {
       const k = key(x.id, y.id);
       if (disliked.has(k)) continue;
-      const parts = viewParts(x.f, y.f);
+      const parts = { ...viewParts(x.f, y.f), plants: plantOverlap(x.plants, y.plants) };
       const isLiked = liked.has(k);
       all.push({ a: x.id, b: y.id, parts, liked: isLiked, score: viewScore(parts, weights), rank: viewScore(parts, weights) + (isLiked ? 10 : 0) });
     }
@@ -266,11 +275,14 @@ export function fitViewWeights(votes, { min = 8 } = {}) {
   };
   let best = DEFAULT_VIEW_WEIGHTS;
   let bestAcc = accuracy(best) + 0.02; // менять веса, только если заметно лучше
+  const r = (x) => Math.round(x * 10) / 10;
   for (let lum = 0; lum <= 1.0001; lum += 0.1) {
     for (let tex = 0; lum + tex <= 1.0001; tex += 0.1) {
-      const w = { lum, tex, full: Math.max(0, 1 - lum - tex) };
-      const acc = accuracy(w);
-      if (acc > bestAcc) { best = w; bestAcc = acc; }
+      for (let pl = 0; lum + tex + pl <= 1.0001; pl += 0.1) {
+        const w = { lum: r(lum), tex: r(tex), plants: r(pl), full: Math.max(0, r(1 - lum - tex - pl)) };
+        const acc = accuracy(w);
+        if (acc > bestAcc) { best = w; bestAcc = acc; }
+      }
     }
   }
   return best;
