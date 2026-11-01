@@ -3,6 +3,7 @@
 import { STORES, getAll, get, put, tx, promisify } from './db.js';
 import { loadCatalog, emit, catalog } from './store.js';
 import { createZip, readZip } from '../lib/zip.js';
+import { mergeVotes } from './viewFeedback.js';
 
 const FORMAT = 'plant-diary-backup';
 const FORMAT_VERSION = 1;
@@ -25,8 +26,8 @@ export async function exportBackup(mode = 'all', onProgress = () => {}) {
   const since = mode === 'changes' ? await lastExportAt() : 0;
   const catalog = {};
   for (const k of CATALOG_KINDS) catalog[k] = await getAll(STORES[k]);
-  const [allPhotos, deletedIds, deletedEntities, coverPins] = await Promise.all([
-    getAll(STORES.photos), get(STORES.meta, 'deletedIds'), get(STORES.meta, 'deletedEntities'), get(STORES.meta, 'coverPins'),
+  const [allPhotos, deletedIds, deletedEntities, coverPins, viewFeedback] = await Promise.all([
+    getAll(STORES.photos), get(STORES.meta, 'deletedIds'), get(STORES.meta, 'deletedEntities'), get(STORES.meta, 'coverPins'), get(STORES.meta, 'viewFeedback'),
   ]);
   const photos = allPhotos.filter((p) => !since || (p.updatedAt || p.importedAt || 0) > since || (p.importedAt || 0) > since);
   const withImages = (p) => !since || (p.importedAt || 0) > since;
@@ -58,7 +59,7 @@ export async function exportBackup(mode = 'all', onProgress = () => {}) {
       data: JSON.stringify({
         format: FORMAT, version: FORMAT_VERSION, exportedAt: started, mode, since,
         part: i + 1, parts: parts.length,
-        catalog, photos: list, deletedIds: deletedIds || [], deletedEntities: deletedEntities || [], coverPins: coverPins || {},
+        catalog, photos: list, deletedIds: deletedIds || [], deletedEntities: deletedEntities || [], coverPins: coverPins || {}, viewFeedback: viewFeedback || [],
       }),
     }];
     for (const p of list) {
@@ -196,6 +197,9 @@ export async function importBackup(file, onProgress = () => {}) {
 
   const pins = (await get(STORES.meta, 'coverPins')) || {};
   await put(STORES.meta, { ...(data.coverPins || {}), ...pins }, 'coverPins');
+  if (data.viewFeedback?.length) {
+    await put(STORES.meta, mergeVotes((await get(STORES.meta, 'viewFeedback')) || [], data.viewFeedback), 'viewFeedback');
+  }
 
   emit('catalog');
   emit('photos');

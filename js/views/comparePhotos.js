@@ -5,6 +5,7 @@ import { formatDate, formatTime, formatNumber, plural, PHOTO_FORMS } from '../li
 import { catalog, plantName, placePath } from '../data/store.js';
 import { featuresFor } from '../data/similarity.js';
 import { bestPairs } from '../lib/features.js';
+import { loadVotes, setVote, feedbackState } from '../data/viewFeedback.js';
 
 function caption(p) {
   const what = p.plantIds.length
@@ -102,21 +103,55 @@ export async function openPairPicker(A, B) {
   const byId = new Map([...A.photos, ...B.photos].map((p) => [p.id, p]));
   const feats = await featuresFor([...byId.keys()]);
   const pick = (list) => list.filter((p) => feats.has(p.id)).map((p) => ({ id: p.id, f: feats.get(p.id) }));
-  const pairs = bestPairs(pick(A.photos), pick(B.photos), 8);
+  let votes = await loadVotes();
+  const fb = feedbackState(votes);
+  const pairs = bestPairs(pick(A.photos), pick(B.photos), 8, fb);
 
   clear(body);
   const thumb = (p) => h('span', { class: 'pair-photo' }, photoImg(p.id), h('span', { class: 'pair-date' }, `${formatDate(p.takenAt)}, ${formatTime(p.takenAt)}`));
   if (pairs.length) {
-    body.append(h('p', { class: 'muted small' }, 'Выберите пару — откроется сравнение. Сверху самые похожие.'));
+    body.append(h('p', { class: 'muted small' }, 'Нажмите на пару — откроется сравнение. Сверху самые похожие.'));
     const list = h('div', { class: 'pair-list' });
     for (const pr of pairs) {
       const a = byId.get(pr.a);
       const b = byId.get(pr.b);
-      list.append(h('button', { class: 'pair-row', type: 'button', dataset: { score: pr.score.toFixed(3) }, onClick: () => show(a, b) },
-        h('span', { class: 'pair-thumbs' }, thumb(a), thumb(b)),
-        h('span', { class: `pair-score${pr.score >= 0.7 ? ' good' : ''}` }, scoreLabel(pr.score))));
+      let state = pr.liked ? true : null;
+      const up = h('button', { class: 'icon-btn vote', type: 'button', 'aria-label': 'Хорошая пара' }, icon('up', 20));
+      const down = h('button', { class: 'icon-btn vote', type: 'button', 'aria-label': 'Плохая пара' }, icon('down', 20));
+      const note = h('span', { class: 'pair-score' });
+      const row = h('div', { class: 'pair-row', dataset: { score: pr.score.toFixed(3) } },
+        h('button', { class: 'pair-thumbs', type: 'button', 'aria-label': 'Сравнить эту пару', onClick: () => show(a, b) }, thumb(a), thumb(b)),
+        h('div', { class: 'pair-foot' }, note, up, down));
+      const sync = () => {
+        up.setAttribute('aria-pressed', String(state === true));
+        down.setAttribute('aria-pressed', String(state === false));
+        row.classList.toggle('rejected', state === false);
+        note.className = `pair-score${state === false ? '' : pr.score >= 0.7 || state ? ' good' : ''}`;
+        note.textContent = state === true ? 'хорошая пара — буду ставить выше'
+          : state === false ? 'больше не предложу эту пару'
+            : scoreLabel(pr.score);
+      };
+      const vote = async (v) => {
+        state = state === v ? null : v;
+        sync();
+        votes = await setVote(pr.a, pr.b, state, pr.parts);
+        drawStatus();
+      };
+      up.addEventListener('click', () => vote(true));
+      down.addEventListener('click', () => vote(false));
+      sync();
+      list.append(row);
     }
     body.append(list);
+    const status = h('p', { class: 'muted small pair-status' });
+    const drawStatus = () => {
+      const st = feedbackState(votes);
+      status.textContent = st.tuned
+        ? `Оценок: ${formatNumber(st.count)}. Подбор уже подстроен под ваши оценки.`
+        : `👍 и 👎 помогают подбору: оценённые пары запоминаются, а после 8 оценок (нужны и 👍, и 👎) подбор подстроится под ваши фото. Сейчас оценок: ${formatNumber(st.count)}.`;
+    };
+    drawStatus();
+    body.append(status);
   } else {
     body.append(h('p', { class: 'muted' }, 'Не удалось сравнить ракурсы — выберите фото сами.'));
   }

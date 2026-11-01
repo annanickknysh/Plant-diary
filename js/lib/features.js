@@ -187,33 +187,91 @@ function structure(f) {
   return out;
 }
 
-/** Похожесть ракурса двух фото: от −1 до 1 (обычно 0,3–0,98). */
-export function viewSimilarity(a, b) {
+/** Три составляющие похожести ракурса: яркость по клеткам, линии, общее сходство (с цветом). */
+export function viewParts(a, b) {
   const sa = structure(a);
   const sb = structure(b);
-  const lum = cosine(sa.subarray(0, GRID * GRID), sb.subarray(0, GRID * GRID));
-  const tex = cosine(sa.subarray(GRID * GRID), sb.subarray(GRID * GRID));
-  return 0.55 * lum + 0.45 * tex;
+  return {
+    lum: cosine(sa.subarray(0, GRID * GRID), sb.subarray(0, GRID * GRID)),
+    tex: cosine(sa.subarray(GRID * GRID), sb.subarray(GRID * GRID)),
+    full: similarity(a, b),
+  };
+}
+
+export const DEFAULT_VIEW_WEIGHTS = { lum: 0.33, tex: 0.27, full: 0.4 };
+
+export const viewScore = (parts, w = DEFAULT_VIEW_WEIGHTS) => w.lum * parts.lum + w.tex * parts.tex + w.full * parts.full;
+
+/** Похожесть ракурса двух фото без учёта цвета: от −1 до 1 (обычно 0,3–0,98). */
+export function viewSimilarity(a, b) {
+  const p = viewParts(a, b);
+  return 0.55 * p.lum + 0.45 * p.tex;
 }
 
 /**
  * Пары самых похожих ракурсов из двух наборов: каждое фото — не больше чем в одной паре.
  * @param A, B — [{id, f}]
- * @returns [{a, b, score}] — по убыванию похожести
+ * @param opts.weights — веса составляющих (подстраиваются по оценкам)
+ * @param opts.liked, opts.disliked — Set ключей `${idA}|${idB}` (порядок не важен)
+ * @returns [{a, b, score, parts, liked}] — по убыванию похожести
  */
-export function bestPairs(A, B, limit = 6) {
+export function bestPairs(A, B, limit = 6, { weights = DEFAULT_VIEW_WEIGHTS, liked = new Set(), disliked = new Set() } = {}) {
+  const key = (x, y) => (x < y ? `${x}|${y}` : `${y}|${x}`);
   const all = [];
-  // Строение кадра + немного общего сходства (цвета помогают внутри одного сезона)
-  for (const x of A) for (const y of B) all.push({ a: x.id, b: y.id, score: 0.6 * viewSimilarity(x.f, y.f) + 0.4 * similarity(x.f, y.f) });
-  all.sort((p, q) => q.score - p.score);
+  for (const x of A) {
+    for (const y of B) {
+      const k = key(x.id, y.id);
+      if (disliked.has(k)) continue;
+      const parts = viewParts(x.f, y.f);
+      const isLiked = liked.has(k);
+      all.push({ a: x.id, b: y.id, parts, liked: isLiked, score: viewScore(parts, weights), rank: viewScore(parts, weights) + (isLiked ? 10 : 0) });
+    }
+  }
+  all.sort((p, q) => q.rank - p.rank);
   const usedA = new Set();
   const usedB = new Set();
   const out = [];
   for (const p of all) {
     if (usedA.has(p.a) || usedB.has(p.b)) continue;
     usedA.add(p.a); usedB.add(p.b);
+    delete p.rank;
     out.push(p);
     if (out.length >= limit) break;
   }
   return out;
+}
+
+/**
+ * Подобрать веса по оценкам: перебор по сетке, цель — чтобы пары с 👍 стояли выше пар с 👎.
+ * @param votes — [{parts: {lum, tex, full}, good: boolean}]
+ * @returns веса или null, если оценок мало
+ */
+export function fitViewWeights(votes, { min = 8 } = {}) {
+  const good = votes.filter((v) => v.good);
+  const bad = votes.filter((v) => !v.good);
+  if (votes.length < min || !good.length || !bad.length) return null;
+  // Доля верно упорядоченных пар (👍 выше 👎) + немного за запас между ними
+  const accuracy = (w) => {
+    let ok = 0;
+    let margin = 0;
+    for (const g of good) {
+      for (const b of bad) {
+        const d = viewScore(g.parts, w) - viewScore(b.parts, w);
+        ok += d > 0 ? 1 : 0;
+        margin += d;
+      }
+    }
+    const n = good.length * bad.length;
+    return ok / n + 0.05 * (margin / n);
+  };
+  let best = DEFAULT_VIEW_WEIGHTS;
+  let bestAcc = accuracy(best) + 0.02; // менять веса, только если заметно лучше
+  for (let lum = 0; lum <= 1.0001; lum += 0.1) {
+    for (let tex = 0; lum + tex <= 1.0001; tex += 0.1) {
+      const w = { lum, tex, full: Math.max(0, 1 - lum - tex) };
+      const acc = accuracy(w);
+      if (acc > bestAcc) { best = w; bestAcc = acc; }
+    }
+  }
+  return best;
 }

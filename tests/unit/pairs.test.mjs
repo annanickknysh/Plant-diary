@@ -34,3 +34,25 @@ test('пары подбираются по ракурсу, каждое фото
   const map = Object.fromEntries(pairs.map((p) => [p.a, p.b]));
   assert.deepEqual(map, { 'a-left': 'b-left', 'a-right': 'b-right' });
 });
+
+test('оценки: пара с 👎 больше не предлагается, с 👍 — первой', async () => {
+  const A = [{ id: 'a-left', f: scene({ house: 'left' }) }, { id: 'a-right', f: scene({ house: 'right' }) }];
+  const B = [{ id: 'b-right', f: scene({ house: 'right', season: 'autumn' }) }, { id: 'b-left', f: scene({ house: 'left', season: 'autumn' }) }];
+  const { bestPairs: bp } = await import('../../js/lib/features.js');
+  const pairs = bp(A, B, 6, { disliked: new Set(['a-left|b-left']), liked: new Set(['a-right|b-left']) });
+  assert.equal(pairs[0].a, 'a-right');
+  assert.equal(pairs[0].b, 'b-left');
+  assert.ok(pairs[0].liked);
+  assert.ok(!pairs.some((p) => p.a === 'a-left' && p.b === 'b-left'));
+});
+
+test('веса подстраиваются по оценкам', async () => {
+  const { fitViewWeights } = await import('../../js/lib/features.js');
+  assert.equal(fitViewWeights([{ parts: { lum: 1, tex: 0, full: 0 }, good: true }]), null);
+  // Хорошие пары отличаются только по линиям — вес линий должен вырасти
+  const votes = [];
+  for (let i = 0; i < 5; i++) votes.push({ parts: { lum: 0.5, tex: 0.9 + i * 0.01, full: 0.5 }, good: true });
+  for (let i = 0; i < 5; i++) votes.push({ parts: { lum: 0.9, tex: 0.3, full: 0.9 }, good: false });
+  const w = fitViewWeights(votes);
+  assert.ok(w.tex > 0.5, JSON.stringify(w));
+});

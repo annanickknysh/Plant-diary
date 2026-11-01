@@ -1,6 +1,6 @@
 // Service worker: приложение открывается и работает без интернета.
 // При изменении любых файлов приложения поднимайте VERSION.
-const VERSION = 'v0.8.3';
+const VERSION = 'v0.8.4';
 const CACHE = `plant-diary-${VERSION}`;
 const FILES = [
   './',
@@ -44,6 +44,7 @@ const FILES = [
   './js/lib/slideshow.js',
   './js/lib/features.js',
   './js/data/similarity.js',
+  './js/data/viewFeedback.js',
   './js/ui/assistantCard.js',
   './js/views/stats.js',
   './js/views/slideshow.js',

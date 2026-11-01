@@ -123,7 +123,16 @@ const pairCount = await page.locator('.pair-row').count();
 await check(pairCount >= 1, `шаг «Похожие ракурсы»: пар ${pairCount}`);
 await page.waitForTimeout(300);
 await shot('pairs');
-await page.locator('.pair-row').first().click();
+// Оценка 👎 убирает пару из подсказок
+await page.locator('.pair-row').first().getByRole('button', { name: 'Плохая пара' }).click();
+await check((await page.locator('.pair-row').first().textContent()).includes('больше не предложу'), '👎 отмечает пару');
+await page.waitForTimeout(300);
+const votes = await page.evaluate(async () => (await (await import('/js/data/viewFeedback.js')).loadVotes()).length);
+await check(votes === 1, 'оценка сохранена');
+await page.locator('.pair-row').first().getByRole('button', { name: 'Плохая пара' }).click();
+await page.locator('.pair-row').first().getByRole('button', { name: 'Хорошая пара' }).click();
+await check((await page.locator('.pair-row').first().textContent()).includes('хорошая пара'), '👍 отмечает пару');
+await page.locator('.pair-thumbs').first().click();
 await page.locator('.compare-body.side img').first().waitFor();
 await page.waitForTimeout(300);
 await shot('compare-side');
