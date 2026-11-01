@@ -53,6 +53,8 @@ const ICONS = {
   edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
   eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
   trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  play: '<path d="M8 5.5v13l10.5-6.5z"/>',
+  pause: '<path d="M8 5v14M16 5v14"/>',
 };
 
 export function icon(name, size = 22) {

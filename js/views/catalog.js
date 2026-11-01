@@ -11,6 +11,7 @@ import { varietyFields } from '../ui/varietyPicker.js';
 import { openEntryForm, entryList, quickEntry } from '../ui/entryForm.js';
 import { formatNumber, plural, PHOTO_FORMS, PLANT_FORMS, formatDate } from '../lib/format.js';
 import { rerender } from '../app.js';
+import { openSlideshowSetup } from './slideshow.js';
 
 const norm = (s) => (s || '').toLowerCase().replace(/ё/g, 'е').trim();
 const byName = (a, b) => a.name.localeCompare(b.name, 'ru');
@@ -200,6 +201,7 @@ export async function placeView(id) {
   if (place.notes) page.append(h('p', { class: 'notes' }, place.notes));
   page.append(viewLinks('place', id, null));
   page.append(h('div', { class: 'chips-row' },
+    photos.length ? h('button', { class: 'pill', type: 'button', onClick: () => openSlideshowSetup(photos, { title: place.name }) }, icon('play', 16), 'Слайд-шоу') : null,
     h('a', { class: 'pill', href: `#/camera/place/${id}` }, icon('camera', 16), 'Снять'),
     h('button', { class: 'pill', type: 'button', onClick: () => openEntryForm({ placeId: id }, { onSaved: () => rerender() }) }, icon('plus', 16), 'Запись')));
   const placeEntries = await entriesFor('place', id);
@@ -257,6 +259,7 @@ export async function plantView(id) {
   }
   page.append(viewLinks('plant', id, comparableVariety(plant)));
   page.append(h('div', { class: 'chips-row' },
+    photos.length ? h('button', { class: 'pill', type: 'button', onClick: () => openSlideshowSetup(photos, { title: varietyName(plant) }) }, icon('play', 16), 'Слайд-шоу') : null,
     h('a', { class: 'pill', href: `#/camera/plant/${id}` }, icon('camera', 16), 'Снять'),
     h('button', { class: 'pill', type: 'button', onClick: () => quickEntry('bloom', { plantId: id }, () => rerender()) }, 'Зацвело сегодня'),
     h('button', { class: 'pill', type: 'button', onClick: () => openEntryForm({ plantId: id }, { onSaved: () => rerender() }) }, icon('plus', 16), 'Запись')));
