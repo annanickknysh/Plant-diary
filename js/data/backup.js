@@ -84,6 +84,20 @@ export async function exportBackup(mode = 'all', onProgress = () => {}) {
  * Растения и места — побеждает более поздняя правка; отметки фото объединяются;
  * удалённое на другом устройстве удаляется и здесь.
  */
+/** Картинки фото есть в хранилище и читаются. */
+async function imagesReadable(id) {
+  try {
+    for (const k of ['t', 'f']) {
+      const b = await get(STORES.images, `${id}:${k}`);
+      if (!b || !b.size) return false;
+      await b.slice(0, 16).arrayBuffer();
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function importBackup(file, onProgress = () => {}) {
   const files = await readZip(file);
   const dataFile = files.get('data.json');
@@ -136,18 +150,24 @@ export async function importBackup(file, onProgress = () => {}) {
     onProgress({ done: ++done, total });
     if (deleted.has(r.id)) continue;
     const l = await get(STORES.photos, r.id);
-    if (!l) {
+    // Фото уже есть, но его картинки не читаются (например, прошлый импорт в Safari сорвался) — запишем их заново
+    const broken = l && !(await imagesReadable(r.id));
+    if (!l || broken) {
       const t = files.get(`images/${r.id}_t.jpg`);
       const f = files.get(`images/${r.id}_f.jpg`);
       if (!t || !f) { report.missingImages++; continue; }
-      const [tb, fb] = [await t.getBlob(), await f.getBlob()];
+      // Копируем байты в память: Safari не умеет надёжно хранить ссылки на кусочки выбранного файла
+      const tb = new Blob([await (await t.getBlob()).arrayBuffer()], { type: 'image/jpeg' });
+      const fb = new Blob([await (await f.getBlob()).arrayBuffer()], { type: 'image/jpeg' });
       await tx([STORES.photos, STORES.images], 'readwrite', (tr) => {
-        tr.objectStore(STORES.images).put(new Blob([tb], { type: 'image/jpeg' }), `${r.id}:t`);
-        tr.objectStore(STORES.images).put(new Blob([fb], { type: 'image/jpeg' }), `${r.id}:f`);
-        tr.objectStore(STORES.photos).put(r);
+        tr.objectStore(STORES.images).put(tb, `${r.id}:t`);
+        tr.objectStore(STORES.images).put(fb, `${r.id}:f`);
+        if (!l) tr.objectStore(STORES.photos).put(r);
       });
-      report.photosAdded++;
-    } else {
+      if (l) report.imagesRepaired = (report.imagesRepaired || 0) + 1;
+      else { report.photosAdded++; continue; }
+    }
+    if (l) {
       const newer = stamp(r) > stamp(l) ? r : l;
       const merged = {
         ...newer,

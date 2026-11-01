@@ -80,7 +80,7 @@ export async function backupCard() {
     input.value = '';
     if (!files.length) return;
     buttons.forEach((b) => { b.disabled = true; });
-    const total = { catalogAdded: 0, catalogUpdated: 0, photosAdded: 0, photosMerged: 0, photosDeleted: 0, missingImages: 0, removed: 0 };
+    const total = { catalogAdded: 0, catalogUpdated: 0, photosAdded: 0, photosMerged: 0, photosDeleted: 0, missingImages: 0, removed: 0, imagesRepaired: 0 };
     try {
       for (let i = 0; i < files.length; i++) {
         const r = await importBackup(files[i], (pr) => {
@@ -94,6 +94,7 @@ export async function backupCard() {
         `растений, мест и записей добавлено: ${formatNumber(total.catalogAdded)}, обновлено: ${formatNumber(total.catalogUpdated)}`,
       ];
       if (total.photosDeleted || total.removed) lines.push(`удалено, как на другом устройстве: фото ${formatNumber(total.photosDeleted)}, записей ${formatNumber(total.removed)}`);
+      if (total.imagesRepaired) lines.push(`восстановлены картинки у фото: ${formatNumber(total.imagesRepaired)}`);
       if (total.missingImages) lines.push(`без изображений (загрузите полный файл): ${formatNumber(total.missingImages)}`);
       clear(status).append(h('p', { class: 'ok-note' }, 'Загружено.'), h('ul', { class: 'report' }, lines.map((l) => h('li', null, l))));
       toast('Дневник загружен');

@@ -7,7 +7,7 @@ import { assistantCard } from '../ui/assistantCard.js';
 import { formatNumber, formatBytes, formatDayShort, plural, PHOTO_FORMS } from '../lib/format.js';
 import { rerender } from '../app.js';
 
-export const APP_VERSION = '0.8.0';
+export const APP_VERSION = '0.8.1';
 
 async function checkUpdates() {
   const reg = await navigator.serviceWorker?.getRegistration?.();

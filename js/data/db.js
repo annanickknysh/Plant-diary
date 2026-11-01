@@ -3,6 +3,7 @@
 const DB_NAME = 'plant-diary';
 const VERSION = 2;
 let dbPromise = null;
+let current = null;
 
 export const STORES = {
   photos: 'photos',     // {id(хэш), takenAt, dateApprox, lat, lon, fileName, folder, w, h, size, importedAt, status, placeIds[], plantIds[]}
@@ -42,6 +43,9 @@ export function openDB() {
         const db = r.result;
         // Если открылась новая версия приложения в другом окне — уступить ей базу
         db.onversionchange = () => { db.close(); location.reload(); };
+        // Safari может сам закрыть соединение (нехватка памяти, сбой записи) — тогда откроем заново
+        db.onclose = () => { if (dbPromise && current === db) dbPromise = null; };
+        current = db;
         resolve(db);
       };
       r.onerror = () => reject(r.error);
@@ -65,11 +69,24 @@ export function promisify(request) {
   });
 }
 
+/** Открыть транзакцию; если соединение уже закрыто (так бывает в Safari) — переоткрыть базу и повторить. */
+async function startTx(stores, mode) {
+  for (let attempt = 0; ; attempt++) {
+    const db = await openDB();
+    try {
+      return db.transaction(stores, mode);
+    } catch (e) {
+      if (attempt >= 2 || (e?.name !== 'InvalidStateError' && !/clos/i.test(e?.message || ''))) throw e;
+      try { db.close(); } catch { /* уже закрыта */ }
+      if (current === db) { dbPromise = null; current = null; }
+    }
+  }
+}
+
 /** Выполнить fn внутри одной транзакции; результат — после её завершения. */
 export async function tx(stores, mode, fn) {
-  const db = await openDB();
+  const t = await startTx(stores, mode);
   return new Promise((resolve, reject) => {
-    const t = db.transaction(stores, mode);
     let result;
     Promise.resolve()
       .then(() => fn(t))
