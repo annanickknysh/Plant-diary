@@ -118,6 +118,12 @@ await page.getByRole('button', { name: 'Сравнить два периода' 
 await page.locator('.cell.photos').nth(0).click();
 await page.locator('.cell.photos').nth(1).click();
 await page.getByRole('button', { name: 'Сравнить', exact: true }).click();
+await page.locator('.pair-row').first().waitFor();
+const pairCount = await page.locator('.pair-row').count();
+await check(pairCount >= 1, `шаг «Похожие ракурсы»: пар ${pairCount}`);
+await page.waitForTimeout(300);
+await shot('pairs');
+await page.locator('.pair-row').first().click();
 await page.locator('.compare-body.side img').first().waitFor();
 await page.waitForTimeout(300);
 await shot('compare-side');
@@ -126,7 +132,16 @@ await page.locator('.cmp-frame').waitFor();
 await page.waitForTimeout(300);
 await shot('compare-slider');
 await check(true, 'сравнение двух фото: рядом и шторкой');
-await page.keyboard.press('Escape');
+await page.getByRole('button', { name: 'Другая пара' }).click();
+await check(await page.locator('.compare').count() === 0 && await page.locator('.pairs').count() === 1, '«Другая пара» возвращает к выбору пар');
+await page.locator('.pair-manual summary').click();
+await page.locator('.pair-side').nth(0).locator('.thumb').first().click();
+await page.locator('.pair-side').nth(1).locator('.thumb').last().click();
+await page.getByRole('button', { name: 'Сравнить выбранные' }).click();
+await page.locator('.compare-body img').first().waitFor();
+await check(true, 'пару можно выбрать вручную');
+await page.locator('.compare').getByRole('button', { name: 'Закрыть' }).click();
+await check(await page.locator('.compare, .pairs').count() === 0, 'крестик закрывает сравнение целиком');
 
 // Сравнение клумб
 await page.goto(`${BASE}#/compare/cultivar/${ids.cv}`);

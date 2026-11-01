@@ -161,3 +161,59 @@ export function meanFeature(list) {
   for (const f of list) for (let i = 0; i < f.length; i++) out[i] += f[i];
   return l2normalize(out);
 }
+
+// Части отпечатка: цвета [0, 28), расположение [28, 76) по 3 числа на клетку (яркость, два цветовых), текстура [76, 108)
+const COLORS_LEN = HUE_BINS * 2 + GRAY_BINS;
+const LAYOUT_LEN = GRID * GRID * 3;
+const TEXTURE_LEN = ORI_GRID * ORI_GRID * ORI_BINS;
+
+function cosine(a, b) {
+  let s = 0; let na = 0; let nb = 0;
+  for (let i = 0; i < a.length; i++) { s += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+  return na && nb ? s / Math.sqrt(na * nb) : 0;
+}
+
+/** Только «строение» кадра: где светлее и темнее, куда идут линии. Цвет не учитывается — так одна
+ *  и та же точка съёмки узнаётся и летом, и осенью. */
+function structure(f) {
+  const out = new Float32Array(GRID * GRID + TEXTURE_LEN);
+  let o = 0;
+  for (let c = 0; c < GRID * GRID; c++) out[o++] = f[COLORS_LEN + c * 3];
+  const lum = out.subarray(0, GRID * GRID);
+  l2normalize(lum);
+  const tex = out.subarray(GRID * GRID);
+  for (let i = 0; i < TEXTURE_LEN; i++) tex[i] = f[COLORS_LEN + LAYOUT_LEN + i];
+  l2normalize(tex);
+  return out;
+}
+
+/** Похожесть ракурса двух фото: от −1 до 1 (обычно 0,3–0,98). */
+export function viewSimilarity(a, b) {
+  const sa = structure(a);
+  const sb = structure(b);
+  const lum = cosine(sa.subarray(0, GRID * GRID), sb.subarray(0, GRID * GRID));
+  const tex = cosine(sa.subarray(GRID * GRID), sb.subarray(GRID * GRID));
+  return 0.55 * lum + 0.45 * tex;
+}
+
+/**
+ * Пары самых похожих ракурсов из двух наборов: каждое фото — не больше чем в одной паре.
+ * @param A, B — [{id, f}]
+ * @returns [{a, b, score}] — по убыванию похожести
+ */
+export function bestPairs(A, B, limit = 6) {
+  const all = [];
+  // Строение кадра + немного общего сходства (цвета помогают внутри одного сезона)
+  for (const x of A) for (const y of B) all.push({ a: x.id, b: y.id, score: 0.6 * viewSimilarity(x.f, y.f) + 0.4 * similarity(x.f, y.f) });
+  all.sort((p, q) => q.score - p.score);
+  const usedA = new Set();
+  const usedB = new Set();
+  const out = [];
+  for (const p of all) {
+    if (usedA.has(p.a) || usedB.has(p.b)) continue;
+    usedA.add(p.a); usedB.add(p.b);
+    out.push(p);
+    if (out.length >= limit) break;
+  }
+  return out;
+}

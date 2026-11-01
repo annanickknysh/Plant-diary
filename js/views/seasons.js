@@ -8,7 +8,7 @@ import { buildGrid, buildComparison } from '../lib/periods.js';
 import { seasonOf } from '../lib/seasons.js';
 import { formatNumber, plural, PHOTO_FORMS, PLANT_FORMS } from '../lib/format.js';
 import { openViewer } from './viewer.js';
-import { openCompare } from './comparePhotos.js';
+import { openPairPicker } from './comparePhotos.js';
 import { rerender } from '../app.js';
 
 const norm = (s) => (s || '').toLowerCase().replace(/ё/g, 'е').trim();
@@ -231,7 +231,7 @@ export async function gridView(kind, id) {
       return;
     }
     pickBar.append(h('span', { class: 'small' }, st.picked.length < 2 ? `Выберите ${st.picked.length ? 'второй' : 'первый'} период` : 'Готово'),
-      h('button', { class: 'btn small primary', type: 'button', disabled: st.picked.length < 2, onClick: () => { const [x, y] = st.picked; st.picking = false; st.picked = []; openCompare(x.cover, y.cover); rerender(); } }, 'Сравнить'),
+      h('button', { class: 'btn small primary', type: 'button', disabled: st.picked.length < 2, onClick: () => { const [x, y] = st.picked; st.picking = false; st.picked = []; openPairPicker({ label: x.label, photos: x.photos || [x.cover] }, { label: y.label, photos: y.photos || [y.cover] }); rerender(); } }, 'Сравнить'),
       h('button', { class: 'btn small ghost', type: 'button', onClick: () => { st.picking = false; st.picked = []; rerender(); } }, 'Отмена'));
   };
   drawPickBar();
@@ -274,7 +274,7 @@ function gridCell(cell, st, tkey, drawPickBar) {
   el.addEventListener('click', () => {
     if (st.picking) {
       if (picked) st.picked = st.picked.filter((p) => p.key !== cell.key);
-      else st.picked = [...st.picked, { key: cell.key, cover: cell.cover }].slice(-2);
+      else st.picked = [...st.picked, { key: cell.key, cover: cell.cover, photos: cell.photos, label: cell.label }].slice(-2);
       rerender();
       return;
     }
@@ -333,10 +333,10 @@ export async function compareView(kind, id) {
 
   const pickBar = h('div', { class: 'pick-bar' });
   if (!st.picking) {
-    pickBar.append(h('button', { class: 'btn small', type: 'button', onClick: () => { st.picking = true; st.picked = []; rerender(); } }, 'Сравнить два фото'));
+    pickBar.append(h('button', { class: 'btn small', type: 'button', onClick: () => { st.picking = true; st.picked = []; rerender(); } }, 'Сравнить два периода'));
   } else {
-    pickBar.append(h('span', { class: 'small' }, st.picked.length < 2 ? `Выберите ${st.picked.length ? 'второе' : 'первое'} фото` : 'Готово'),
-      h('button', { class: 'btn small primary', type: 'button', disabled: st.picked.length < 2, onClick: () => { const [x, y] = st.picked; st.picking = false; st.picked = []; openCompare(x.cover, y.cover); rerender(); } }, 'Сравнить'),
+    pickBar.append(h('span', { class: 'small' }, st.picked.length < 2 ? `Выберите ${st.picked.length ? 'второй' : 'первый'} период` : 'Готово'),
+      h('button', { class: 'btn small primary', type: 'button', disabled: st.picked.length < 2, onClick: () => { const [x, y] = st.picked; st.picking = false; st.picked = []; openPairPicker({ label: x.label, photos: x.photos || [x.cover] }, { label: y.label, photos: y.photos || [y.cover] }); rerender(); } }, 'Сравнить'),
       h('button', { class: 'btn small ghost', type: 'button', onClick: () => { st.picking = false; st.picked = []; rerender(); } }, 'Отмена'));
   }
   page.append(pickBar);
@@ -360,7 +360,8 @@ export async function compareView(kind, id) {
         photoImg(c.cover.id), h('span', { class: 'cell-count' }, String(c.photos.length)));
       el.addEventListener('click', () => {
         if (st.picking) {
-          st.picked = picked ? st.picked.filter((p) => p.key !== ckey) : [...st.picked, { key: ckey, cover: c.cover }].slice(-2);
+          const bed = catalog.places.get(shown.find((g) => g.id === c.groupId)?.plant.placeId)?.name;
+          st.picked = picked ? st.picked.filter((p) => p.key !== ckey) : [...st.picked, { key: ckey, cover: c.cover, photos: c.photos, label: [r.label, bed].filter(Boolean).join(' · ') }].slice(-2);
           rerender();
           return;
         }
