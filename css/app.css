@@ -159,6 +159,9 @@ body.fullscreen-route #view { padding-bottom: 0; }
 .toolbar-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .photo-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 @media (min-width: 600px) { .photo-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); } }
+/* Разметка: крупные превью по 2 в ряд */
+.photo-grid.selectable { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 600px) { .photo-grid.selectable { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); } }
 .tile-wrap { position: relative; }
 .tile {
   position: relative; display: block; width: 100%; aspect-ratio: 1 / 1; padding: 0; border: 3px solid transparent;
@@ -166,10 +169,13 @@ body.fullscreen-route #view { padding-bottom: 0; }
 }
 .tile-date { position: absolute; left: 6px; bottom: 5px; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); }
 .tile-check { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 12px; display: none; align-items: center; justify-content: center; background: var(--accent); color: #fff; }
-.selectable .tile { opacity: 0.72; }
-.selectable .tile.on { opacity: 1; border-color: var(--accent); }
-.selectable .tile.on .tile-check { display: flex; }
-.tile-zoom { position: absolute; left: 6px; top: 6px; width: 32px; height: 32px; border-radius: 16px; border: none; background: rgba(20, 28, 22, 0.6); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.tile img { transition: opacity 0.15s; }
+/* Невыбранные — полноценные, выбранные бледнеют и получают галочку */
+.selectable .tile.on { border-color: var(--accent); }
+.selectable .tile.on img { opacity: 0.45; }
+.selectable .tile.on .tile-check { display: flex; width: 30px; height: 30px; border-radius: 15px; }
+.tile-zoom { position: absolute; left: 6px; top: 6px; width: 30px; height: 30px; border-radius: 15px; border: none; background: rgba(255, 255, 255, 0.22); color: rgba(255, 255, 255, 0.9); display: flex; align-items: center; justify-content: center; cursor: pointer; backdrop-filter: blur(2px); }
+.tile-zoom svg { width: 16px; height: 16px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4)); }
 .month-groups { display: flex; flex-direction: column; gap: 8px; }
 .month-head { font-size: 15px; font-weight: 700; margin-top: 8px; }
 
