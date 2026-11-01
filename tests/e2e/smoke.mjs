@@ -54,7 +54,9 @@ await check(cards === 4, `4 прогулки (получено ${cards})`);
 // Прогулка 1: вся — клумбой, новая клумба с GPS
 await page.getByRole('link', { name: 'Разобрать прогулку' }).first().click();
 await page.getByRole('heading', { name: '14 апреля 2023' }).waitFor();
-await check((await page.locator('.tile.on').count()) === 8, 'в прогулке 8 фото, все выбраны');
+await check((await page.locator('.tile.on').count()) === 0, 'прогулка открылась без выбора');
+await page.getByRole('button', { name: 'Выбрать все' }).click();
+await check((await page.locator('.tile.on').count()) === 8, 'в прогулке 8 фото, «Выбрать все» выбирает все');
 await shot('walk');
 await page.getByRole('button', { name: 'Клумба или вид…' }).click();
 await page.getByRole('button', { name: 'Новая зона или клумба' }).click();
@@ -115,6 +117,7 @@ await check(true, 'фото «не растение» удалено из при
 // Дерево мест: зона → клумба внутри неё
 await page.goto(`${BASE}#/queue`);
 await page.getByRole('link', { name: 'Разобрать прогулку' }).last().click();
+await page.getByRole('button', { name: 'Выбрать все' }).click();
 await page.getByRole('button', { name: 'Клумба или вид…' }).click();
 await page.getByRole('button', { name: 'Новая зона или клумба' }).click();
 await page.getByPlaceholder('Название, например «Клумба у крыльца»').fill('Зона огорода');
@@ -135,6 +138,7 @@ await page.keyboard.press('Escape');
 await page.goto(`${BASE}#/queue`);
 await page.getByRole('link', { name: 'Разобрать прогулку' }).last().click();
 await page.locator('.tile').first().waitFor();
+await page.getByRole('button', { name: 'Выбрать все' }).click();
 await page.getByRole('button', { name: 'Клумба или вид…' }).click();
 await page.getByRole('button', { name: /Открыть «Зона огорода»/ }).click();
 await page.getByRole('button', { name: 'Новый вид в «Зона огорода»' }).click();
@@ -183,6 +187,7 @@ await shot('tagplace');
 await page.goto(`${BASE}#/queue`);
 await page.getByRole('link', { name: 'Разобрать прогулку' }).last().click();
 await page.getByRole('heading', { name: '6 июня 2024' }).waitFor();
+await page.getByRole('button', { name: 'Выбрать все' }).click();
 await page.getByRole('button', { name: 'Клумба или вид…' }).click();
 await page.getByPlaceholder('Найти клумбу или зону').fill('клубн');
 await page.getByRole('button', { name: /Грядка с клубникой/ }).click();

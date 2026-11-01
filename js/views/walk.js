@@ -40,7 +40,7 @@ export async function walkView(routeId) {
   const ids = photos.map((p) => p.id);
   // В памяти держим только фото, которые ещё остались в прогулке
   mem.ids = new Set([...mem.ids, ...ids]);
-  if (!mem.selected) mem.selected = new Set(ids);
+  if (!mem.selected) mem.selected = new Set(); // открывается без выбора
   for (const id of [...mem.selected]) if (!ids.includes(id)) mem.selected.delete(id);
   const sel = mem.selected;
 

@@ -89,6 +89,7 @@ const firstFile = await page.evaluate(async () => {
   const s = await import('/js/data/store.js');
   return (await s.photosByStatus('new')).sort((a, b) => a.takenAt - b.takenAt)[0].fileName;
 });
+await page.locator('.tile').first().click();
 await page.getByRole('button', { name: 'Клумба или вид…' }).click();
 await page.locator('.sugg').waitFor();
 await page.waitForTimeout(200);
