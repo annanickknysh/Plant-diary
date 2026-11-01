@@ -108,22 +108,21 @@ export async function openRangeSheet(fileList, { fromFolder = true } = {}) {
 export function importButtons({ compact = false } = {}) {
   const files = h('input', { type: 'file', multiple: true, accept: 'image/*', class: 'visually-hidden', tabindex: '-1', 'aria-hidden': 'true' });
   files.addEventListener('change', () => {
+    // Значение поля не сбрасываем сразу: на Android это может закрыть доступ к файлам до конца импорта.
     const list = [...files.files];
-    files.value = '';
     if (list.length > 30) openRangeSheet(list, { fromFolder: false });
     else if (list.length) importFiles(list);
   });
   const wrap = h('div', { class: `import-buttons${compact ? ' compact' : ''}` }, files,
-    h('button', { class: 'btn primary', type: 'button', onClick: () => files.click() }, icon('image', 20), 'Добавить фото'));
+    h('button', { class: 'btn primary', type: 'button', onClick: () => { files.value = ''; files.click(); } }, icon('image', 20), 'Добавить фото'));
   if (supportsFolders()) {
     const folder = h('input', { type: 'file', webkitdirectory: true, multiple: true, class: 'visually-hidden', tabindex: '-1', 'aria-hidden': 'true' });
     folder.webkitdirectory = true;
     folder.addEventListener('change', () => {
       const list = [...folder.files];
-      folder.value = '';
       if (list.length) openRangeSheet(list);
     });
-    wrap.append(folder, h('button', { class: 'btn', type: 'button', onClick: () => folder.click() }, icon('folder', 20), 'Добавить папку'));
+    wrap.append(folder, h('button', { class: 'btn', type: 'button', onClick: () => { folder.value = ''; folder.click(); } }, icon('folder', 20), 'Добавить папку'));
   }
   return wrap;
 }

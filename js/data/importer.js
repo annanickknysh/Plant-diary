@@ -71,7 +71,7 @@ export function importFiles(fileList, { tag = null, range = null } = {}) {
   else progress(true);
 }
 
-async function run() {
+async function run({ workers = 2 } = {}) {
   importState.running = true;
   progress(true);
   const deleted = await deletedIds();
@@ -83,13 +83,14 @@ async function run() {
         const id = await importOne(file, quality, deleted, range);
         if (id && tag) await tagPhotos([id], tag);
       } catch (e) {
-        importState.failed.push({ name: file.name, reason: describeError(file, e) });
+        console.warn('Импорт', file.name, e);
+        importState.failed.push({ name: file.name, reason: describeError(file, e), file, tag });
       }
       importState.processed++;
       progress();
     }
   };
-  await Promise.all([worker(), worker()]);
+  await Promise.all(Array.from({ length: workers }, worker));
   importState.running = false;
   importState.finishedAt = Date.now();
   progress(true);
@@ -97,9 +98,26 @@ async function run() {
 }
 
 function describeError(file, e) {
-  if (isHeicName(file)) return 'не удалось раскрыть фото HEIC';
+  const code = e?.name && e.name !== 'Error' ? ` (${e.name})` : '';
   if (e?.name === 'QuotaExceededError') return 'не хватает места в хранилище';
-  return 'не удалось прочитать изображение';
+  if (e?.name === 'NotReadableError' || e?.name === 'NotFoundError' || e?.name === 'SecurityError') {
+    return `телефон не дал прочитать файл — возможно, он только в облаке или доступ к папке закрылся${code}`;
+  }
+  if (isHeicName(file)) return `не удалось раскрыть фото HEIC${code}`;
+  return `не удалось раскрыть изображение${code}`;
+}
+
+/** Повторить импорт файлов, которые не прочитались, — по одному, без спешки. */
+export function retryFailed() {
+  const list = importState.failed.filter((f) => f.file);
+  if (!list.length) return 0;
+  importState.failed = importState.failed.filter((f) => !f.file);
+  for (const f of list) queue.push({ file: f.file, tag: f.tag || null, range: null });
+  if (!importState.running) {
+    Object.assign(importState, { total: list.length, processed: 0, added: 0, duplicates: 0, noDate: 0, failed: [], skipped: 0, deletedBefore: 0, outOfRange: 0, startedAt: Date.now(), finishedAt: 0 });
+    run({ workers: 1 });
+  } else importState.total += list.length;
+  return list.length;
 }
 
 async function hashFile(file) {

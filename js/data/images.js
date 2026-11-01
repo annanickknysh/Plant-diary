@@ -15,20 +15,40 @@ async function looksHeif(blob) {
   return s.startsWith('ftyp') && /^(heic|heix|hevc|hevx|mif1|msf1|heim|heis)/.test(s.slice(4));
 }
 
-async function decode(file) {
+/** Раскрыть через <img> — другой путь декодирования, выручает, когда createImageBitmap не справился. */
+function decodeViaImg(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(Object.assign(new Error('img decode failed'), { name: 'EncodingError' })); };
+    img.src = url;
+  }).then(async (img) => {
+    try { return await createImageBitmap(img); } finally { URL.revokeObjectURL(img.src); }
+  });
+}
+
+async function decode(file, maxSide) {
   try {
     return await createImageBitmap(file, { imageOrientation: 'from-image' });
   } catch (e) {
-    if (!(await looksHeif(file))) throw e;
-    const { heicTo } = await loadHeic();
-    // libheif сам применяет поворот из файла
-    return heicTo({ blob: file, type: 'bitmap' });
+    if (await looksHeif(file).catch(() => false)) {
+      const { heicTo } = await loadHeic();
+      // libheif сам применяет поворот из файла
+      return heicTo({ blob: file, type: 'bitmap' });
+    }
+    // Очень большие снимки (50–200 Мп) могут не поместиться в память целиком — раскрываем сразу уменьшенными
+    try {
+      return await createImageBitmap(file, { imageOrientation: 'from-image', resizeWidth: Math.max(maxSide, 2000), resizeQuality: 'high' });
+    } catch {
+      return decodeViaImg(file).catch(() => { throw e; });
+    }
   }
 }
 
 /** Уменьшить изображение. Ориентацию по EXIF браузер применяет сам. */
 export async function makeResized(file, maxSide, quality) {
-  const bmp = await decode(file);
+  const bmp = await decode(file, maxSide);
   try {
     const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
     const w = Math.max(1, Math.round(bmp.width * scale));

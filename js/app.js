@@ -1,7 +1,7 @@
 // Точка входа: загрузка каталога, навигация, панель импорта.
 import { openDB } from './data/db.js';
 import { loadCatalog, bus, countPhotos } from './data/store.js';
-import { importState } from './data/importer.js';
+import { importState, retryFailed } from './data/importer.js';
 import { h, clear, icon } from './ui/dom.js';
 import { formatNumber } from './lib/format.js';
 import { queueView } from './views/queue.js';
@@ -134,6 +134,9 @@ function updateBanner(st) {
       h('p', null, `${parts.join(' · ')}.`),
     );
     if (details) banner.append(details);
+    if (st.failed.some((f) => f.file)) {
+      banner.append(h('button', { class: 'btn small', type: 'button', onClick: () => retryFailed() }, `Попробовать ещё раз (${formatNumber(st.failed.length)})`));
+    }
   }
 }
 
