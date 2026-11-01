@@ -40,7 +40,8 @@ export async function assistantCard() {
             h('thead', null, h('tr', null, h('th', null, ''), h('th', null, 'с первого раза'), h('th', null, 'среди 3 подсказок'), h('th', null, 'фото'))),
             h('tbody', null,
               h('tr', null, h('th', null, 'Клумба или вид'), h('td', null, pct(r.place.top1, r.place.n)), h('td', null, pct(r.place.top3, r.place.n)), h('td', null, formatNumber(r.place.n))),
-              h('tr', null, h('th', null, 'Растение'), h('td', null, pct(r.plant.top1, r.plant.n)), h('td', null, pct(r.plant.top3, r.plant.n)), h('td', null, formatNumber(r.plant.n))))),
+              h('tr', null, h('th', null, 'Растение'), h('td', null, pct(r.plant.top1, r.plant.n)), h('td', null, pct(r.plant.top3, r.plant.n)), h('td', null, formatNumber(r.plant.n))),
+              h('tr', null, h('th', null, 'Растение, когда клумба уже выбрана'), h('td', null, pct(r.plantInBed.top1, r.plantInBed.n)), h('td', null, pct(r.plantInBed.top3, r.plantInBed.n)), h('td', null, formatNumber(r.plantInBed.n))))),
           h('p', { class: 'muted small' }, 'Чем больше размечено разных сезонов и ракурсов, тем выше точность. Подсказки всё равно нужно подтверждать — это помощь, а не автоматическая разметка.'));
       } catch (e) {
         clear(result).append(h('p', { class: 'form-error' }, e.message || String(e)));

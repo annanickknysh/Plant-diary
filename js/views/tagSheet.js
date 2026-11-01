@@ -138,7 +138,9 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
       if (list === null) return h('p', { class: 'muted small sugg-wait' }, 'Ищу похожие фото…');
       if (!list?.length) return null;
       const rows = list.map((sg) => {
-        const sub = `${confidence(sg.share)} · похожих фото: ${sg.support}`;
+        const sub = sg.reason === 'plant' ? 'здесь растёт отмеченное растение'
+          : sg.reason === 'variety' ? 'здесь растёт тот же сорт'
+            : `${confidence(sg.share)} · похожих фото: ${sg.support}`;
         if (st.mode === 'place') {
           const p = catalog.places.get(sg.key);
           return p ? row(p.id, p.name, [p.kind === 'view' ? 'вид' : parentPath(p.id), sub].filter(Boolean).join(' · ')) : null;
@@ -151,7 +153,8 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
         const p = catalog.plants.get(sg.key);
         return p ? row(p.id, varietyName(p), `${sub} · ${catalog.places.get(p.placeId)?.name || ''}`) : null;
       }).filter(Boolean);
-      return rows.length ? h('div', { class: 'pick-section sugg' }, h('h3', { class: 'eyebrow' }, icon('eye', 14), ' Похоже на'), rows) : null;
+      const head = st.mode === 'plant' && ctxPlace ? ` Похоже на (среди растений «${catalog.places.get(ctxPlace)?.name}»)` : ' Похоже на';
+      return rows.length ? h('div', { class: 'pick-section sugg' }, h('h3', { class: 'eyebrow' }, icon('eye', 14), head), rows) : null;
     };
 
     const placeNear = () => {

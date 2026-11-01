@@ -1,6 +1,6 @@
 // Помощник распознавания: отпечатки фото, фоновый расчёт, подсказки «Похоже на…», проверка точности.
 import { STORES, tx, promisify, getAll } from './db.js';
-import { emit, catalog, photosByStatus } from './store.js';
+import { emit, catalog, photosByStatus, placeWithDescendants } from './store.js';
 import { computeFeatures, vote, meanFeature, FEATURE_SIZE, FEATURE_VERSION } from '../lib/features.js';
 
 const cache = new Map(); // id фото → Float32Array
@@ -121,43 +121,100 @@ async function labeledSet(excludeIds = new Set()) {
 
 export const MIN_LABELED = 10;
 
+const varietyOf = (p) => `${p.speciesId}:${p.cultivarId || ''}`;
+
+/**
+ * Распознавание растения только среди тех, что растут в клумбе.
+ * Фото других клумб тоже учитываются, если на них тот же сорт, что растёт здесь.
+ * @returns [{key, share, support}] или null, если в клумбе нет растений
+ */
+function plantVoteInBed(query, month, labeled, bedId) {
+  const inBed = new Set(placeWithDescendants(bedId));
+  const bedPlants = [...catalog.plants.values()].filter((p) => inBed.has(p.placeId));
+  if (!bedPlants.length) return null;
+  const byVariety = new Map();
+  for (const p of bedPlants) if (!byVariety.has(varietyOf(p)) || p.status !== 'dead') byVariety.set(varietyOf(p), p.id);
+  const items = [];
+  for (const l of labeled) {
+    const labels = [...new Set(l.plants.map((id) => {
+      const p = catalog.plants.get(id);
+      if (!p) return null;
+      return inBed.has(p.placeId) ? p.id : byVariety.get(varietyOf(p)) || null;
+    }).filter(Boolean))];
+    if (labels.length) items.push({ f: l.f, takenAt: l.takenAt, labels });
+  }
+  if (!items.length) return [];
+  return vote(query, items, { month }).map((r) => ({ key: r.label, share: r.share, support: r.support }));
+}
+
+/** Клумбы, где растут растения, уже отмеченные на фото (и тот же сорт в других клумбах). */
+function bedsOfPlants(photos) {
+  const ids = new Set(photos.flatMap((p) => p.plantIds || []));
+  const own = new Map();
+  const same = new Map();
+  for (const id of ids) {
+    const p = catalog.plants.get(id);
+    if (!p || !catalog.places.has(p.placeId)) continue;
+    own.set(p.placeId, (own.get(p.placeId) || 0) + 1);
+    for (const o of catalog.plants.values()) {
+      if (o.id !== p.id && varietyOf(o) === varietyOf(p) && catalog.places.has(o.placeId)) same.set(o.placeId, (same.get(o.placeId) || 0) + 1);
+    }
+  }
+  return { own, same };
+}
+
 /**
  * Подсказки для выбранных фото.
  * @param mode 'place' | 'plant'
- * @param ctxPlace — клумба фото: растения из других клумб предлагаются как сорт («v:вид:сорт»)
- * @returns [{key, share, support}] — до 3 вариантов
+ * @param ctxPlace — клумба фото: растения ищутся только среди растущих в ней
+ * @returns [{key, share, support, reason?}] — до 3 вариантов
  */
 export async function suggest(photos, mode, { ctxPlace = null } = {}) {
   if (!photos.length) return [];
   const selected = new Set(photos.map((p) => p.id));
   const labeled = await labeledSet(selected);
-  if (labeled.length < MIN_LABELED) return [];
-  const qf = await featuresFor([...selected]);
-  if (!qf.size) return [];
-  const query = meanFeature([...qf.values()]);
   const month = new Date(photos[0].takenAt).getMonth();
-  const items = labeled.map((l) => ({ f: l.f, takenAt: l.takenAt, labels: mode === 'place' ? l.places : l.plants })).filter((x) => x.labels.length);
-  if (items.length < MIN_LABELED / 2) return [];
-  let res = vote(query, items, { month });
-  if (mode === 'plant' && ctxPlace) {
-    // Растение из другой клумбы → тот же сорт в клумбе фото
-    const merged = new Map();
-    for (const r of res) {
-      const p = catalog.plants.get(r.label);
-      if (!p) continue;
-      const vk = `v:${p.speciesId}:${p.cultivarId || ''}`;
-      const here = [...catalog.plants.values()].find((x) => x.placeId === ctxPlace && x.speciesId === p.speciesId && (x.cultivarId || '') === (p.cultivarId || ''));
-      const key = here ? here.id : vk;
-      const cur = merged.get(key) || { key, share: 0, support: 0 };
-      cur.share += r.share;
-      cur.support += r.support;
-      merged.set(key, cur);
-    }
-    res = [...merged.values()].sort((a, b) => b.share - a.share);
-  } else {
-    res = res.map((r) => ({ key: r.label, share: r.share, support: r.support }));
+
+  // Клумба по уже отмеченным растениям — даже без «зрения»
+  let fromPlants = [];
+  if (mode === 'place') {
+    const { own, same } = bedsOfPlants(photos);
+    fromPlants = [
+      ...[...own.keys()].map((key) => ({ key, share: 1, support: 0, reason: 'plant' })),
+      ...[...same.keys()].filter((k) => !own.has(k)).map((key) => ({ key, share: 0.6, support: 0, reason: 'variety' })),
+    ];
   }
-  return res.filter((r) => r.share >= 0.12).slice(0, 3);
+
+  let res = [];
+  const enough = labeled.length >= MIN_LABELED;
+  const qf = enough ? await featuresFor([...selected]) : new Map();
+  if (qf.size) {
+    const query = meanFeature([...qf.values()]);
+    if (mode === 'plant' && ctxPlace) {
+      res = plantVoteInBed(query, month, labeled, ctxPlace);
+      if (res === null) {
+        // В клумбе ещё нет растений — ищем по всему саду, сорт добавится в эту клумбу
+        const items = labeled.map((l) => ({ f: l.f, takenAt: l.takenAt, labels: l.plants })).filter((x) => x.labels.length);
+        const merged = new Map();
+        for (const r of vote(query, items, { month })) {
+          const p = catalog.plants.get(r.label);
+          if (!p) continue;
+          const key = `v:${p.speciesId}:${p.cultivarId || ''}`;
+          const cur = merged.get(key) || { key, share: 0, support: 0 };
+          cur.share += r.share;
+          cur.support += r.support;
+          merged.set(key, cur);
+        }
+        res = [...merged.values()].sort((a, b) => b.share - a.share);
+      }
+    } else {
+      const items = labeled.map((l) => ({ f: l.f, takenAt: l.takenAt, labels: mode === 'place' ? l.places : l.plants })).filter((x) => x.labels.length);
+      if (items.length >= MIN_LABELED / 2) res = vote(query, items, { month }).map((r) => ({ key: r.label, share: r.share, support: r.support }));
+    }
+  }
+  res = res.filter((r) => r.share >= 0.12);
+  const seen = new Set(fromPlants.map((r) => r.key));
+  return [...fromPlants, ...res.filter((r) => !seen.has(r.key))].slice(0, 3);
 }
 
 /**
@@ -167,7 +224,7 @@ export async function suggest(photos, mode, { ctxPlace = null } = {}) {
 export async function evaluate({ sample = 250, onProgress } = {}) {
   const all = await labeledSet();
   const pick = all.length > sample ? [...all].sort(() => Math.random() - 0.5).slice(0, sample) : all;
-  const res = { place: { n: 0, top1: 0, top3: 0 }, plant: { n: 0, top1: 0, top3: 0 }, total: all.length };
+  const res = { place: { n: 0, top1: 0, top3: 0 }, plant: { n: 0, top1: 0, top3: 0 }, plantInBed: { n: 0, top1: 0, top3: 0 }, total: all.length };
   const near = 2 * 3600 * 1000;
   let i = 0;
   for (const q of pick) {
@@ -179,6 +236,16 @@ export async function evaluate({ sample = 250, onProgress } = {}) {
       if (items.length < 3) continue;
       const top = vote(q.f, items, { month: new Date(q.takenAt).getMonth() }).slice(0, 3).map((x) => x.label);
       const r = res[mode];
+      r.n++;
+      if (top[0] && truth.has(top[0])) r.top1++;
+      if (top.some((l) => truth.has(l))) r.top3++;
+    }
+    // Растение, когда клумба уже выбрана: ищем только среди растений этой клумбы
+    const bed = q.places.find((id) => catalog.places.get(id)?.kind !== 'view' && q.plants.some((pid) => catalog.plants.get(pid)?.placeId === id));
+    if (bed) {
+      const top = (plantVoteInBed(q.f, new Date(q.takenAt).getMonth(), others, bed) || []).slice(0, 3).map((x) => x.key);
+      const truth = new Set(q.plants);
+      const r = res.plantInBed;
       r.n++;
       if (top[0] && truth.has(top[0])) r.top1++;
       if (top.some((l) => truth.has(l))) r.top3++;

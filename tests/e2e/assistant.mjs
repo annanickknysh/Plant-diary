@@ -100,6 +100,35 @@ await page.getByRole('button', { name: /Отметить \d+ фото/ }).click(
 await page.getByText(/Отмечено: \d+ фото/).waitFor();
 await check(true, 'подсказку можно выбрать одним касанием и отметить');
 
+// Связь «растение ↔ клумба»
+const link = await page.evaluate(async () => {
+  const s = await import('/js/data/store.js');
+  const sim = await import('/js/data/similarity.js');
+  const place = (n) => [...s.catalog.places.values()].find((p) => p.name === n);
+  const [flowers, pond] = [place('Цветник'), place('Пруд')];
+  const sp1 = await s.createSpecies({ name: 'Роза' });
+  const sp2 = await s.createSpecies({ name: 'Кувшинка' });
+  const rose = await s.createPlant({ speciesId: sp1.id, placeId: flowers.id });
+  const lily = await s.createPlant({ speciesId: sp2.id, placeId: pond.id });
+  const tagged = await s.photosByStatus('tagged');
+  await s.tagPhotos(tagged.filter((p) => p.fileName.startsWith('flowers_')).map((p) => p.id), { plantIds: [rose.id] });
+  await s.tagPhotos(tagged.filter((p) => p.fileName.startsWith('pond_')).map((p) => p.id), { plantIds: [lily.id] });
+  const fresh = await s.photosByStatus('new');
+  const pondPhoto = fresh.find((p) => p.fileName.startsWith('pond_'));
+  const free = (await sim.suggest([pondPhoto], 'plant')).map((r) => r.key);
+  const inFlowers = (await sim.suggest([pondPhoto], 'plant', { ctxPlace: flowers.id })).map((r) => r.key);
+  const withPlant = { ...fresh.find((p) => p.fileName.startsWith('shrubs_')), plantIds: [rose.id] };
+  const bedSugg = await sim.suggest([withPlant], 'place');
+  return {
+    freeTop: free[0] === lily.id,
+    onlyBed: inFlowers.length > 0 && inFlowers.every((k) => k === rose.id),
+    bedFirst: bedSugg[0]?.key === flowers.id && bedSugg[0]?.reason === 'plant',
+  };
+});
+await check(link.freeTop, 'без клумбы: фото пруда → «Кувшинка»');
+await check(link.onlyBed, 'клумба «Цветник» выбрана: предлагаются только растения цветника');
+await check(link.bedFirst, 'на фото отмечена «Роза» → первой подсказкой клумба «Цветник»');
+
 // Проверка точности
 await page.goto(`${BASE}#/more`);
 await page.getByRole('button', { name: 'Проверить точность' }).click();
@@ -107,6 +136,8 @@ await page.locator('.acc-table').waitFor({ timeout: 60000 });
 const placeRow = await page.locator('.acc-table tbody tr').first().textContent();
 await shot('accuracy');
 await check(/Клумба или вид\d+%\d+%\d+/.test(placeRow), `таблица точности: ${placeRow}`);
+const bedRow = await page.locator('.acc-table tbody tr').nth(2).textContent();
+await check(/Растение, когда клумба уже выбрана\d+%\d+%\d+/.test(bedRow), `строка «когда клумба выбрана»: ${bedRow}`);
 
 await check(errors.length === 0, `нет ошибок в консоли${errors.length ? `: ${errors.join(' | ')}` : ''}`);
 await browser.close();
