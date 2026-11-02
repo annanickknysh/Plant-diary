@@ -2,7 +2,7 @@
 import { h, icon, clear, photoImg } from '../ui/dom.js';
 import { imageURL } from '../data/images.js';
 import { formatDate, formatTime, formatNumber, plural, PHOTO_FORMS } from '../lib/format.js';
-import { catalog, plantName, placePath } from '../data/store.js';
+import { catalog, plantName, placePath, varietyName } from '../data/store.js';
 import { featuresFor } from '../data/similarity.js';
 import { bestPairs, viewParts, plantOverlap } from '../lib/features.js';
 import { loadVotes, setVote, feedbackState, pairKey } from '../data/viewFeedback.js';
@@ -119,7 +119,9 @@ export async function openPairPicker(A, B) {
 
   const byId = new Map([...A.photos, ...B.photos].map((p) => [p.id, p]));
   const feats = await featuresFor([...byId.keys()]);
-  const pick = (list) => list.filter((p) => feats.has(p.id)).map((p) => ({ id: p.id, f: feats.get(p.id), plants: p.plantIds || [] }));
+  // Растения сравниваем по виду и сорту: тот же сорт, даже другой экземпляр, — совпадение
+  const varieties = (p) => [...new Set((p.plantIds || []).map((id) => catalog.plants.get(id)).filter(Boolean).map((pl) => `${pl.speciesId}:${pl.cultivarId || ''}`))];
+  const pick = (list) => list.filter((p) => feats.has(p.id)).map((p) => ({ id: p.id, f: feats.get(p.id), plants: varieties(p) }));
   const itemsA = pick(A.photos);
   const itemsB = pick(B.photos);
   let votes = await loadVotes();
@@ -127,7 +129,16 @@ export async function openPairPicker(A, B) {
   const partsOf = (a, b) => {
     const fa = feats.get(a.id);
     const fb2 = feats.get(b.id);
-    return fa && fb2 ? { ...viewParts(fa, fb2), plants: plantOverlap(a.plantIds, b.plantIds) } : null;
+    return fa && fb2 ? { ...viewParts(fa, fb2), plants: plantOverlap(varieties(a), varieties(b)) } : null;
+  };
+  const commonNames = (a, b) => {
+    const vb = new Set(varieties(b));
+    const names = [];
+    for (const id of a.plantIds || []) {
+      const pl = catalog.plants.get(id);
+      if (pl && vb.has(`${pl.speciesId}:${pl.cultivarId || ''}`)) names.push(varietyName(pl));
+    }
+    return [...new Set(names)].join(', ');
   };
   const vote = async (a, b, good) => { votes = await setVote(a.id, b.id, good, partsOf(a, b)); };
 
@@ -148,7 +159,15 @@ export async function openPairPicker(A, B) {
     if (pairs.length) {
       body.append(h('p', { class: 'muted small' }, 'Нажмите на пару — откроется сравнение. Сверху самые похожие.'));
       const list = h('div', { class: 'pair-list' });
+      const anyShared = pairs.some((pr) => pr.parts.plants > 0);
+      const tagged = [...itemsA, ...itemsB].some((x) => x.plants.length);
+      if (tagged && !anyShared) list.append(h('p', { class: 'muted small' }, 'В этих периодах нет фото с общими растениями — пары подобраны только по ракурсу.'));
+      let dividerShown = false;
       for (const pr of pairs) {
+        if (anyShared && !pr.liked && pr.parts.plants === 0 && !dividerShown) {
+          dividerShown = true;
+          list.append(h('h3', { class: 'eyebrow pair-divider' }, 'Без общих растений — только по ракурсу'));
+        }
         const a = byId.get(pr.a);
         const b = byId.get(pr.b);
         let state = voteOf(a, b);
@@ -163,7 +182,8 @@ export async function openPairPicker(A, B) {
           down.setAttribute('aria-pressed', String(state === false));
           row.classList.toggle('rejected', state === false);
           note.className = `pair-score${state === false ? '' : visual(pr.parts) >= 0.7 || state ? ' good' : ''}`;
-          const plants = pr.parts.plants > 0 ? ' · те же растения' : '';
+          const shared = pr.parts.plants > 0 ? commonNames(a, b) : '';
+          const plants = shared ? ` · общие: ${shared}` : '';
           note.textContent = state === true ? 'закреплена — буду ставить выше'
             : state === false ? 'больше не предложу эту пару'
               : `${scoreLabel(visual(pr.parts))}${plants}`;

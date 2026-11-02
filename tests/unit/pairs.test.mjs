@@ -67,3 +67,14 @@ test('совпадение растений поднимает пару', async 
   const B = [{ id: 'b-other', f, plants: ['hosta'] }, { id: 'b-same', f, plants: ['rose'] }];
   assert.equal(bp(A, B)[0].b, 'b-same');
 });
+
+test('пары с общими растениями всегда выше пар без них, даже если по картинке хуже', async () => {
+  const { bestPairs: bp } = await import('../../js/lib/features.js');
+  const left = scene({ house: 'left' });
+  const right = scene({ house: 'right', season: 'autumn' });
+  const A = [{ id: 'a', f: left, plants: ['rudbeckia'] }];
+  // b-look — тот же кадр, но другие растения; b-plant — другой кадр, но та же рудбекия
+  const B = [{ id: 'b-look', f: left, plants: ['lupin'] }, { id: 'b-plant', f: right, plants: ['rudbeckia', 'lupin'] }];
+  const pairs = bp(A, B);
+  assert.equal(pairs[0].b, 'b-plant');
+});

@@ -489,3 +489,4 @@ body.fullscreen-route #view { padding-bottom: 0; }
 .compare .viewer-top { gap: 6px; padding-left: 8px; }
 .compare .viewer-top .segmented { flex: 1; min-width: 0; }
 .cmp-back { padding: 0 10px 0 6px; }
+.pair-divider { color: #B9C3BB; margin: 6px 2px 0; }

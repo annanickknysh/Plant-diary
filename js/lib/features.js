@@ -233,7 +233,9 @@ export function bestPairs(A, B, limit = 6, { weights = DEFAULT_VIEW_WEIGHTS, lik
       if (disliked.has(k)) continue;
       const parts = { ...viewParts(x.f, y.f), plants: plantOverlap(x.plants, y.plants) };
       const isLiked = liked.has(k);
-      all.push({ a: x.id, b: y.id, parts, liked: isLiked, score: viewScore(parts, weights), rank: viewScore(parts, weights) + (isLiked ? 10 : 0) });
+      // Порядок: закреплённые → с общими растениями → остальные; внутри — по похожести
+      const tier = (isLiked ? 20 : 0) + (parts.plants > 0 ? 10 : 0);
+      all.push({ a: x.id, b: y.id, parts, liked: isLiked, score: viewScore(parts, weights), rank: viewScore(parts, weights) + tier });
     }
   }
   all.sort((p, q) => q.rank - p.rank);
