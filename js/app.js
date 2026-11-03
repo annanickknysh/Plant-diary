@@ -12,6 +12,7 @@ import { seasonsHome, gridView, compareView } from './views/seasons.js';
 import { placeTaggingView } from './views/placeTagging.js';
 import { journalView } from './views/journal.js';
 import { statsView } from './views/stats.js';
+import { favoritesView } from './views/favorites.js';
 import { indexAll } from './data/similarity.js';
 import { nnRun } from './data/nnIndex.js';
 
@@ -25,6 +26,7 @@ const routes = [
   { re: /^\/tagplace\/([\w-]+)$/, view: placeTaggingView, tab: 'catalog', full: true },
   { re: /^\/seasons$/, view: seasonsHome, tab: 'seasons' },
   { re: /^\/stats$/, view: statsView, tab: 'seasons' },
+  { re: /^\/favorites$/, view: favoritesView, tab: 'seasons' },
   { re: /^\/grid\/(plant|cultivar|species|place)\/([\w-]+)$/, view: gridView, tab: 'seasons' },
   { re: /^\/compare\/(cultivar|species)\/([\w-]+)$/, view: compareView, tab: 'seasons' },
   { re: /^\/camera(?:\/(plant|place)\/([\w-]+))?$/, view: journalView, tab: 'camera' },

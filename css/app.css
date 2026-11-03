@@ -499,3 +499,14 @@ body.fullscreen-route #view { padding-bottom: 0; }
 .acc-table .nn-col { background: var(--accent-soft); }
 .acc-table.two td { white-space: nowrap; }
 .btn.small.icon-only { padding: 0 10px; min-width: 40px; justify-content: center; }
+
+/* Избранные пары и отметки «где интереснее» */
+.list-sub + .rich, .rich { display: block; font-size: 12px; font-weight: 600; color: var(--accent-text, var(--accent)); margin-top: 2px; }
+.fav-star { font-size: 24px; color: #D9A21B; line-height: 1; }
+.list-thumb:has(.fav-star) { display: flex; align-items: center; justify-content: center; }
+.sort-row { margin: 2px 0 6px; }
+.fav-group { margin-bottom: 18px; }
+.fav-group .section-title { display: flex; align-items: center; gap: 4px; margin-bottom: 0; }
+.fav-pair { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 8px; margin-top: 8px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font: inherit; color: inherit; text-align: left; }
+.fav-pair .pair-thumbs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.fav-meta { font-size: 13px; color: var(--muted, #5B6A5E); padding-left: 2px; }

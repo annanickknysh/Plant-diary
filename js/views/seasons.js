@@ -6,6 +6,8 @@ import {
 } from '../data/store.js';
 import { buildGrid, buildComparison } from '../lib/periods.js';
 import { seasonOf } from '../lib/seasons.js';
+import { newRich, addPhoto, richLabel, richScore } from '../lib/richness.js';
+import { loadVotes } from '../data/viewFeedback.js';
 import { formatNumber, plural, PHOTO_FORMS, PLANT_FORMS } from '../lib/format.js';
 import { openViewer } from './viewer.js';
 import { openPairPicker } from './comparePhotos.js';
@@ -16,19 +18,25 @@ const SEASON_CHIPS = [['spring', 'Весна'], ['summer', 'Лето'], ['autumn
 
 // Состояние экранов по объекту: режим, фильтр лет, столбец, выбор для сравнения
 const gridState = new Map();
-const homeUi = { query: '', tab: 'places', open: new Set() };
+const homeUi = { query: '', tab: 'places', open: new Set(), sort: 'name' };
 
 // ======================= выбор объекта =======================
 
 export async function seasonsHome() {
-  const tagged = await photosByStatus('tagged');
+  const [tagged, votes] = await Promise.all([photosByStatus('tagged'), loadVotes()]);
   // Счётчики фото: по растению, сорту, виду и по месту вместе со всем, что внутри него
   const count = { plant: new Map(), cultivar: new Map(), species: new Map(), place: new Map() };
   const cover = new Map();
+  const rich = new Map(); // «kind:id» → годы, сезоны по годам, избранные пары
+  const keysOf = new Map(); // id фото → Set «kind:id», к которым оно относится
   const bump = (kind, id, p) => {
     count[kind].set(id, (count[kind].get(id) || 0) + 1);
     const key = `${kind}:${id}`;
     if (!cover.has(key) || p.takenAt > cover.get(key).takenAt) cover.set(key, p);
+    if (!rich.has(key)) rich.set(key, newRich());
+    addPhoto(rich.get(key), p.takenAt);
+    if (!keysOf.has(p.id)) keysOf.set(p.id, new Set());
+    keysOf.get(p.id).add(key);
   };
   for (const p of tagged) {
     const sp = new Set();
@@ -50,6 +58,18 @@ export async function seasonsHome() {
     }
     places.forEach((id) => bump('place', id, p));
   }
+  // Избранные пары (👍): звёздочка тем местам и растениям, к которым относятся оба фото пары
+  let favCount = 0;
+  for (const v of votes) {
+    if (!v.good) continue;
+    const [a, b] = v.k.split('|');
+    const ka = keysOf.get(a);
+    const kb = keysOf.get(b);
+    if (!ka || !kb) continue;
+    favCount++;
+    for (const k of ka) if (kb.has(k)) rich.get(k).stars++;
+  }
+  const score = (kind, id) => richScore(rich.get(`${kind}:${id}`));
 
   const page = h('div', { class: 'page' });
   page.append(h('header', { class: 'page-head' }, h('h1', null, 'Сезоны'),
@@ -57,6 +77,11 @@ export async function seasonsHome() {
   page.append(h('a', { class: 'list-row stats-link', href: '#/stats' },
     h('div', { class: 'list-thumb' }, icon('grid', 22)),
     h('span', { class: 'list-text' }, h('span', { class: 'list-title' }, 'Фото по датам'), h('span', { class: 'list-sub' }, 'за какие месяцы и дни есть снимки')),
+    icon('chevron', 18)));
+  page.append(h('a', { class: 'list-row stats-link fav-link', href: '#/favorites' },
+    h('div', { class: 'list-thumb' }, h('span', { class: 'fav-star' }, '★')),
+    h('span', { class: 'list-text' }, h('span', { class: 'list-title' }, 'Избранные пары'),
+      h('span', { class: 'list-sub' }, favCount ? `${formatNumber(favCount)} ${plural(favCount, ['пара отмечена', 'пары отмечены', 'пар отмечено'])} 👍` : 'здесь соберутся пары, отмеченные 👍')),
     icon('chevron', 18)));
 
   if (!tagged.length) {
@@ -77,7 +102,8 @@ export async function seasonsHome() {
     const link = h('a', { class: 'list-row', href: `#/grid/${kind}/${id}`, style: depth ? { marginLeft: `${depth * 18}px` } : null },
       h('div', { class: 'list-thumb' }, cover.get(`${kind}:${id}`) ? photoImg(cover.get(`${kind}:${id}`).id) : icon(kind === 'place' ? 'pin' : 'leaf', 22)),
       h('span', { class: 'list-text' }, h('span', { class: 'list-title' }, kind === 'place' && catalog.places.get(id)?.kind === 'view' ? [icon('eye', 15), ' ', targetName(kind, id)] : targetName(kind, id)),
-        h('span', { class: 'list-sub' }, [sub ?? targetSubtitle(kind, id), photosText(count[kind].get(id))].filter(Boolean).join(' · '))),
+        h('span', { class: 'list-sub' }, [sub ?? targetSubtitle(kind, id), photosText(count[kind].get(id))].filter(Boolean).join(' · ')),
+        richLabel(rich.get(`${kind}:${id}`)) ? h('span', { class: 'rich' }, richLabel(rich.get(`${kind}:${id}`))) : null),
       toggle ? null : icon('chevron', 18));
     if (!toggle) return link;
     const open = homeUi.open.has(`${kind}:${id}`);
@@ -90,7 +116,8 @@ export async function seasonsHome() {
 
   const drawPlaces = () => {
     const kids = (pid) => [...catalog.places.values()].filter((p) => (p.parentId || null) === pid && count.place.get(p.id))
-      .sort((a, b) => (a.kind === 'view') - (b.kind === 'view') || a.name.localeCompare(b.name, 'ru'));
+      .sort((a, b) => (homeUi.sort === 'rich' ? score('place', b.id) - score('place', a.id) : 0)
+        || (a.kind === 'view') - (b.kind === 'view') || a.name.localeCompare(b.name, 'ru'));
     const walk = (pid, depth) => {
       for (const p of kids(pid)) {
         const inner = kids(p.id);
@@ -102,7 +129,8 @@ export async function seasonsHome() {
   };
 
   const drawPlants = () => {
-    const species = [...catalog.species.values()].filter((sp) => count.species.get(sp.id)).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    const species = [...catalog.species.values()].filter((sp) => count.species.get(sp.id))
+      .sort((a, b) => (homeUi.sort === 'rich' ? score('species', b.id) - score('species', a.id) : 0) || a.name.localeCompare(b.name, 'ru'));
     for (const sp of species) {
       const plants = [...catalog.plants.values()].filter((p) => p.speciesId === sp.id && count.plant.get(p.id));
       const cultivars = [...catalog.cultivars.values()].filter((c) => c.speciesId === sp.id && count.cultivar.get(c.id));
@@ -113,7 +141,8 @@ export async function seasonsHome() {
         for (const c of cultivars) {
           if (plantsOfTarget('cultivar', c.id).length > 1) body.append(row('cultivar', c.id, { depth: 1, sub: `сорт · растений: ${plantsOfTarget('cultivar', c.id).length}` }));
         }
-        for (const p of plants.sort((a, b) => varietyName(a).localeCompare(varietyName(b), 'ru') || placePath(a.placeId).localeCompare(placePath(b.placeId), 'ru'))) {
+        for (const p of plants.sort((a, b) => (homeUi.sort === 'rich' ? score('plant', b.id) - score('plant', a.id) : 0)
+          || varietyName(a).localeCompare(varietyName(b), 'ru') || placePath(a.placeId).localeCompare(placePath(b.placeId), 'ru'))) {
           body.append(row('plant', p.id, { depth: 1 }));
         }
       }
@@ -128,6 +157,11 @@ export async function seasonsHome() {
     tabs.append(
       h('button', { type: 'button', 'aria-pressed': String(homeUi.tab === 'places'), onClick: () => { homeUi.tab = 'places'; draw(); } }, 'Места'),
       h('button', { type: 'button', 'aria-pressed': String(homeUi.tab === 'plants'), onClick: () => { homeUi.tab = 'plants'; draw(); } }, 'Растения'));
+    if (!q) {
+      body.append(h('div', { class: 'chips-row sort-row' }, h('span', { class: 'muted small' }, 'Сначала:'),
+        h('button', { class: 'pill', type: 'button', 'aria-pressed': String(homeUi.sort === 'name'), onClick: () => { homeUi.sort = 'name'; draw(); } }, 'по алфавиту'),
+        h('button', { class: 'pill', type: 'button', 'aria-pressed': String(homeUi.sort === 'rich'), onClick: () => { homeUi.sort = 'rich'; draw(); } }, '★ где интереснее')));
+    }
     if (q) {
       // Поиск — плоским списком по всему
       const match = (kind, id, extra = '') => norm(`${targetName(kind, id)} ${targetSubtitle(kind, id)} ${extra}`).includes(q);
