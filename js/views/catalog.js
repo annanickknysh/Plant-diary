@@ -62,7 +62,8 @@ export async function catalogView(tab = 'plants') {
   page.append(h('header', { class: 'page-head' }, h('h1', null, 'Каталог')));
   page.append(h('div', { class: 'segmented wide', role: 'group', 'aria-label': 'Раздел каталога' },
     h('a', { href: '#/catalog/plants', 'aria-current': tab === 'plants' ? 'page' : null, class: tab === 'plants' ? 'on' : '' }, 'Растения'),
-    h('a', { href: '#/catalog/places', 'aria-current': tab === 'places' ? 'page' : null, class: tab === 'places' ? 'on' : '' }, 'Места')));
+    h('a', { href: '#/catalog/places', 'aria-current': tab === 'places' ? 'page' : null, class: tab === 'places' ? 'on' : '' }, 'Места'),
+    h('a', { href: '#/catalog/views', 'aria-current': tab === 'views' ? 'page' : null, class: tab === 'views' ? 'on' : '' }, 'Виды')));
 
   const search = h('input', { type: 'search', placeholder: 'Поиск по виду, сорту, месту', 'aria-label': 'Поиск', autocomplete: 'off' });
   search.value = ui.query;
@@ -77,6 +78,7 @@ export async function catalogView(tab = 'plants') {
       return;
     }
     if (tab === 'places') drawPlaces(results, s);
+    else if (tab === 'views') drawViews(results, s);
     else drawSpecies(results, s);
   };
   search.addEventListener('input', () => { ui.query = search.value; draw(); });
@@ -85,7 +87,9 @@ export async function catalogView(tab = 'plants') {
   page.append(h('div', { class: 'add-row' },
     tab === 'places'
       ? h('button', { class: 'btn', type: 'button', onClick: () => placeForm({}) }, icon('plus', 20), 'Новое место')
-      : h('button', { class: 'btn', type: 'button', onClick: () => speciesForm({}) }, icon('plus', 20), 'Новый вид')));
+      : tab === 'views'
+        ? h('button', { class: 'btn', type: 'button', onClick: () => placeForm({ kind: 'view' }) }, icon('plus', 20), 'Новый вид')
+        : h('button', { class: 'btn', type: 'button', onClick: () => speciesForm({}) }, icon('plus', 20), 'Новый вид растения')));
   return page;
 }
 
@@ -111,7 +115,8 @@ function drawSpecies(el, s) {
 }
 
 function drawPlaces(el, s) {
-  const places = [...catalog.places.values()];
+  // Виды (ракурсы) — в своей вкладке; здесь только зоны и клумбы
+  const places = [...catalog.places.values()].filter((p) => p.kind !== 'view');
   if (!places.length) {
     el.append(h('p', { class: 'muted empty-note' }, 'Мест пока нет. Создайте участок, зону или клумбу — например, «Перед домом» → «Клумба у крыльца».'));
     return;
@@ -128,6 +133,29 @@ function drawPlaces(el, s) {
     }
   };
   walk(null, 0);
+}
+
+function drawViews(el, s) {
+  const views = [...catalog.places.values()].filter((p) => p.kind === 'view');
+  if (!views.length) {
+    el.append(h('p', { class: 'muted empty-note' }, 'Видов пока нет. Вид — это ракурс, который вы снимаете из года в год: «Вид на дом», «Вид дорожки».'));
+    return;
+  }
+  // Группами по зонам, внутри — по алфавиту
+  const zoneName = (p) => (p.parentId ? placePath(p.parentId) : '');
+  const groups = new Map();
+  for (const v of views.sort(byName)) {
+    const z = zoneName(v);
+    if (!groups.has(z)) groups.set(z, []);
+    groups.get(z).push(v);
+  }
+  for (const z of [...groups.keys()].sort((a, b) => (a || 'яяя').localeCompare(b || 'яяя', 'ru'))) {
+    el.append(h('h3', { class: 'eyebrow' }, z || 'Без зоны'));
+    for (const v of groups.get(z)) {
+      const st = s.places.get(v.id);
+      el.append(listRow(`#/place/${v.id}`, st?.cover, v.name, countText(null, st?.count || 0)));
+    }
+  }
 }
 
 function drawSearch(el, q, s) {
@@ -192,7 +220,8 @@ export async function speciesView(id) {
 export async function placeView(id) {
   const place = catalog.places.get(id);
   const page = h('div', { class: 'page' });
-  page.append(h('a', { class: 'back-link', href: place?.parentId ? `#/place/${place.parentId}` : '#/catalog/places' }, icon('back', 20), place?.parentId ? catalog.places.get(place.parentId)?.name || 'Назад' : 'Места'));
+  const toList = place?.kind === 'view' ? ['#/catalog/views', 'Виды'] : ['#/catalog/places', 'Места'];
+  page.append(h('a', { class: 'back-link', href: place?.parentId && place.kind !== 'view' ? `#/place/${place.parentId}` : toList[0] }, icon('back', 20), place?.parentId && place.kind !== 'view' ? catalog.places.get(place.parentId)?.name || 'Назад' : toList[1]));
   if (!place) return notFound(page);
   const [s, photos] = await Promise.all([stats(), photosOfPlace(id)]);
   page.append(h('header', { class: 'page-head tight' }, h('h1', null, place.name),
@@ -354,7 +383,7 @@ function cultivarForm(sp, cv) {
 
 function placeForm(place) {
   formSheet({
-    title: place.id ? 'Место' : 'Новое место',
+    title: place.id ? (place.kind === 'view' ? 'Вид' : 'Место') : place.kind === 'view' ? 'Новый вид' : 'Новое место',
     fields: [
       { name: 'name', label: 'Название', value: place.name, required: true, placeholder: 'Например, Клумба у крыльца' },
       { name: 'kind', label: 'Что это', type: 'select', value: place.kind || 'bed', options: [{ value: 'bed', label: 'Клумба, зона или другое место' }, { value: 'view', label: 'Вид (ракурс, который снимаю из года в год)' }] },

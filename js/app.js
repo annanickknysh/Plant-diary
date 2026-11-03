@@ -18,7 +18,7 @@ import { nnRun } from './data/nnIndex.js';
 const routes = [
   { re: /^\/queue$/, view: queueView, tab: 'queue' },
   { re: /^\/walk\/([\w-]+)$/, view: walkView, tab: 'queue', full: true },
-  { re: /^\/catalog(?:\/(plants|places))?$/, view: catalogView, tab: 'catalog' },
+  { re: /^\/catalog(?:\/(plants|places|views))?$/, view: catalogView, tab: 'catalog' },
   { re: /^\/species\/([\w-]+)$/, view: speciesView, tab: 'catalog' },
   { re: /^\/place\/([\w-]+)$/, view: placeView, tab: 'catalog' },
   { re: /^\/plant\/([\w-]+)$/, view: plantView, tab: 'catalog' },

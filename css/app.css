@@ -188,7 +188,7 @@ body.fullscreen-route #view { padding-bottom: 0; }
 .has-action-bar { padding-bottom: 170px; }
 
 /* ---------- списки каталога ---------- */
-.segmented { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); background: var(--surface-2); border-radius: 12px; padding: 4px; }
+.segmented { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); background: var(--surface-2); border-radius: 12px; padding: 4px; }
 .segmented > button, .segmented > a {
   min-height: 40px; border: none; border-radius: 9px; background: transparent; color: var(--muted);
   font-weight: 700; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; text-decoration: none;
