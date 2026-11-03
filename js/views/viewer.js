@@ -4,6 +4,7 @@ import { formatDate, formatTime } from '../lib/format.js';
 import { catalog, plantName, placePath, setPhotoTags, getPhoto, tagPhotos, deletePhotos, restoreDeletedPhotos } from '../data/store.js';
 import { toast, confirmAction } from '../ui/dom.js';
 import { openTagSheet } from './tagSheet.js';
+import { rotatePhoto } from '../data/rotate.js';
 
 /**
  * @param opts.onChange — вызвать после правки отметок
@@ -53,6 +54,8 @@ export function openViewer(photos, index, { onChange, actions = [] } = {}) {
     info.append(chips, h('div', { class: 'viewer-actions' },
       h('button', { class: 'btn small', type: 'button', onClick: addTag }, icon('plus', 18), 'Отметить'),
       actions.map((a) => h('button', { class: 'btn small', type: 'button', onClick: () => a.onClick(photos[i]) }, a.label)),
+      h('button', { class: 'btn small icon-only', type: 'button', 'aria-label': 'Повернуть против часовой стрелки', onClick: (e) => rotate(-1, e.currentTarget) }, icon('rotl', 18)),
+      h('button', { class: 'btn small icon-only', type: 'button', 'aria-label': 'Повернуть по часовой стрелке', onClick: (e) => rotate(1, e.currentTarget) }, icon('rotr', 18)),
       h('button', { class: 'btn small', type: 'button', onClick: removePhoto }, icon('trash', 16), 'Удалить')));
     if (p.fileName) info.append(h('div', { class: 'viewer-file' }, p.folder ? `${p.folder}/${p.fileName}` : p.fileName));
   };
@@ -64,6 +67,27 @@ export function openViewer(photos, index, { onChange, actions = [] } = {}) {
     await setPhotoTags(p.id, { placeIds, plantIds });
     onChange?.();
     drawInfo();
+  };
+
+  let rotating = false;
+  const rotate = async (dir, btn) => {
+    if (rotating) return;
+    rotating = true;
+    btn.disabled = true;
+    const img = stage.querySelector('img');
+    if (img) { img.style.transition = 'transform .25s'; img.style.transform = `rotate(${dir * 90}deg)`; }
+    try {
+      const p = await rotatePhoto(photos[i].id, dir);
+      if (p) photos[i] = p;
+      draw();
+      onChange?.();
+      toast('Фото повёрнуто, отпечатки пересчитаны');
+    } catch (e) {
+      toast(`Не удалось повернуть: ${e.message}`);
+      if (img) img.style.transform = '';
+    } finally {
+      rotating = false;
+    }
   };
 
   const removePhoto = async () => {

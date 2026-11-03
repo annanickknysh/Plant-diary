@@ -102,3 +102,31 @@ export async function imageURL(id, kind = 't') {
   }
   return url;
 }
+
+/** Забыть ссылки на картинки фото (после поворота они устарели). */
+export function forgetURLs(id) {
+  for (const k of ['t', 'f']) {
+    const key = `${id}:${k}`;
+    const u = urlCache.get(key);
+    if (u) { urlCache.delete(key); setTimeout(() => URL.revokeObjectURL(u), 30000); }
+  }
+}
+
+/** Повернуть картинку на 90° (по часовой стрелке при dir = 1, против — при dir = −1). */
+export async function rotateBlob(blob, dir, quality = 0.9) {
+  const bmp = await createImageBitmap(blob);
+  const w = bmp.height;
+  const hgt = bmp.width;
+  let canvas;
+  if (typeof OffscreenCanvas !== 'undefined') canvas = new OffscreenCanvas(w, hgt);
+  else { canvas = document.createElement('canvas'); canvas.width = w; canvas.height = hgt; }
+  const ctx = canvas.getContext('2d');
+  ctx.translate(w / 2, hgt / 2);
+  ctx.rotate((dir > 0 ? 90 : -90) * Math.PI / 180);
+  ctx.drawImage(bmp, -bmp.width / 2, -bmp.height / 2);
+  bmp.close?.();
+  const out = canvas.convertToBlob
+    ? await canvas.convertToBlob({ type: 'image/jpeg', quality })
+    : await new Promise((r) => canvas.toBlob(r, 'image/jpeg', quality));
+  return { blob: out, width: w, height: hgt };
+}

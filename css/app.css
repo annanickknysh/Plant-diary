@@ -498,3 +498,4 @@ body.fullscreen-route #view { padding-bottom: 0; }
 .acc-table.two { font-size: 13px; }
 .acc-table .nn-col { background: var(--accent-soft); }
 .acc-table.two td { white-space: nowrap; }
+.btn.small.icon-only { padding: 0 10px; min-width: 40px; justify-content: center; }
