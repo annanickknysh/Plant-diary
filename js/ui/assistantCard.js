@@ -63,26 +63,25 @@ export async function assistantCard() {
         const r = await evaluate({
           onProgress: (i, n) => { clear(result).append(h('p', null, `Проверяю: ${formatNumber(i)} из ${formatNumber(n)} фото`)); },
         });
-        const row = (label, key) => {
-          const cells = [h('th', null, label), h('td', null, pct(r[key].top1, r[key].n)), h('td', null, pct(r[key].top3, r[key].n))];
-          if (r.nn) cells.push(h('td', { class: 'nn-col' }, pct(r.nn[key].top1, r.nn[key].n)), h('td', { class: 'nn-col' }, pct(r.nn[key].top3, r.nn[key].n)));
-          cells.push(h('td', null, formatNumber(r[key].n)));
-          return h('tr', null, cells);
-        };
-        const head = r.nn
-          ? [h('tr', null, h('th', null, ''), h('th', { colspan: 2 }, 'Прежний'), h('th', { colspan: 2, class: 'nn-col' }, 'Нейросеть'), h('th', null, '')),
-            h('tr', null, h('th', null, ''), h('th', null, '1-я'), h('th', null, 'из 3'), h('th', { class: 'nn-col' }, '1-я'), h('th', { class: 'nn-col' }, 'из 3'), h('th', null, 'фото'))]
-          : [h('tr', null, h('th', null, ''), h('th', null, 'с первого раза'), h('th', null, 'среди 3 подсказок'), h('th', null, 'фото'))];
+        const models = [['Прежний', r, 'old']];
+        if (r.nn) models.push(['Нейросеть', r.nn, 'knn']);
+        if (r.head) models.push(['Обученная', r.head, 'head']);
+        const pc = (a, n) => (n ? Math.round((a / n) * 100) : '—');
+        const cell = (m, key) => h('td', { class: m[2] === r.best ? 'nn-col' : '' }, `${pc(m[1][key].top1, m[1][key].n)} / ${pc(m[1][key].top3, m[1][key].n)}`);
+        const row = (label, key) => h('tr', null, h('th', null, label), models.map((m) => cell(m, key)), h('td', null, formatNumber(r[key].n)));
+        const bestName = { knn: 'Нейросеть — по самым похожим фото', head: 'Обученная — нейросеть, дообученная на ваших разметках' }[r.best];
         clear(result).append(...[
           h('p', null, r.nn
-            ? 'Обе модели по очереди угадывали одни и те же ваши размеченные фото по остальным (без кадров той же прогулки).'
+            ? 'Модели по очереди угадывали одни и те же ваши размеченные фото, не видя кадров той же прогулки. «Обученная» проверена ещё строже: училась на 4/5 прогулок и угадывала оставшиеся.'
             : 'Помощник по очереди угадывал ваши размеченные фото по остальным (без кадров той же прогулки).'),
           h('table', { class: `acc-table${r.nn ? ' two' : ''}` },
-            h('thead', null, head),
-            h('tbody', null, row('Клумба или вид', 'place'), row('Растение', 'plant'), row('Растение, когда клумба уже выбрана', 'plantInBed'))),
-          r.nn ? null : (nnToggle.checked ? h('p', { class: 'muted small' }, `Нейросеть пока изучила ${formatNumber(r.nnCount)} размеченных фото — сравнение появится, когда их будет хотя бы ${MIN_LABELED}.`) : null),
-          h('p', { class: 'muted small' }, '«1-я» — верная подсказка стоит первой, «из 3» — она среди трёх. Подсказки всё равно нужно подтверждать — это помощь, а не автоматическая разметка.'),
-        ].filter(Boolean));
+            h('thead', null, h('tr', null, h('th', null, ''), models.map((m) => h('th', { class: m[2] === r.best ? 'nn-col' : '' }, m[0])), h('th', null, 'фото'))),
+            h('tbody', null, row('Клумба или вид', 'place'), row('Растение', 'plant'), row('Растение в выбранной клумбе', 'plantInBed'))),
+          h('p', { class: 'muted small' }, 'В клетке: % верных с первой подсказки / % среди трёх подсказок.'),
+          bestName ? h('p', { class: 'ok-note' }, `Подсказки теперь даёт: ${bestName}.`) : null,
+          !r.nn && nnToggle.checked ? h('p', { class: 'muted small' }, `Нейросеть пока изучила ${formatNumber(r.nnCount)} размеченных фото — сравнение появится, когда их будет хотя бы ${MIN_LABELED}.`) : null,
+          h('p', { class: 'muted small' }, 'Подсказки всё равно нужно подтверждать — это помощь, а не автоматическая разметка.'),
+        ]);
       } catch (e) {
         clear(result).append(h('p', { class: 'form-error' }, e.message || String(e)));
       }

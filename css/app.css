@@ -497,3 +497,4 @@ body.fullscreen-route #view { padding-bottom: 0; }
 .nn-box .btn { align-self: flex-start; }
 .acc-table.two { font-size: 13px; }
 .acc-table .nn-col { background: var(--accent-soft); }
+.acc-table.two td { white-space: nowrap; }

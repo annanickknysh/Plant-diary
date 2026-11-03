@@ -160,3 +160,14 @@ export async function nnCount() {
   await loadAll();
   return cache.size;
 }
+
+/** Обучить «голову» в фоновом потоке. X — массив отпечатков, labels — метки каждого фото. */
+export async function nnTrainHead(X, labels) {
+  const n = X.length;
+  if (!n) return null;
+  const d = X[0].length;
+  const flat = new Float32Array(n * d);
+  X.forEach((v, i) => flat.set(v, i * d));
+  const r = await call({ type: 'train', flat, n, d, labels }, [flat.buffer]);
+  return r.head ? { ...r.head, X } : null;
+}

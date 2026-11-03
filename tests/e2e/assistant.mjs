@@ -136,9 +136,9 @@ await page.getByRole('button', { name: 'Проверить точность' }).
 await page.locator('.acc-table').waitFor({ timeout: 60000 });
 const placeRow = await page.locator('.acc-table tbody tr').first().textContent();
 await shot('accuracy');
-await check(/Клумба или вид\d+%\d+%\d+/.test(placeRow), `таблица точности: ${placeRow}`);
+await check(/Клумба или вид\d+ \/ \d+\d+/.test(placeRow), `таблица точности: ${placeRow}`);
 const bedRow = await page.locator('.acc-table tbody tr').nth(2).textContent();
-await check(/Растение, когда клумба уже выбрана\d+%\d+%\d+/.test(bedRow), `строка «когда клумба выбрана»: ${bedRow}`);
+await check(/Растение в выбранной клумбе\d+ \/ \d+\d+/.test(bedRow), `строка «в выбранной клумбе»: ${bedRow}`);
 
 await check(errors.length === 0, `нет ошибок в консоли${errors.length ? `: ${errors.join(' | ')}` : ''}`);
 await browser.close();

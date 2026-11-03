@@ -94,7 +94,39 @@ const rows = await page.locator('.acc-table.two tbody tr').allTextContents();
 console.log('  ', rows.join('\n   '));
 await page.locator('.acc-table.two').scrollIntoViewIfNeeded();
 await page.screenshot({ path: `${SHOTS}-accuracy.png` });
-await check(rows.length === 3, 'таблица «Прежний / Нейросеть»');
+await check(rows.length === 3, 'таблица «Прежний / Нейросеть / Обученная»');
+const heads = await page.locator('.acc-table.two thead th').allTextContents();
+await check(heads.includes('Обученная'), `колонки: ${heads.filter(Boolean).join(', ')}`);
+const best = await page.locator('.ok-note', { hasText: 'Подсказки теперь даёт' }).textContent();
+await check(true, best);
+// Подсказки от выбранной модели
+const sugg2 = await page.evaluate(async () => {
+  const s = await import('/js/data/store.js');
+  const sim = await import('/js/data/similarity.js');
+  const out = [];
+  for (const p of await s.photosByStatus('new')) out.push((await sim.suggest([p], 'place')).length);
+  return { model: await s.getSetting('nnModel'), counts: out };
+});
+await check(sugg2.counts.every((n) => n > 0), `подсказки от модели «${sugg2.model}» есть для всех свежих фото`);
+// «Голова»: первый вызов запускает обучение в фоне, затем подсказки идут от неё
+const headRes = await page.evaluate(async () => {
+  const s = await import('/js/data/store.js');
+  const sim = await import('/js/data/similarity.js');
+  await s.setSetting('nnModel', 'head');
+  const fresh = await s.photosByStatus('new');
+  await sim.suggest([fresh[0]], 'place');
+  const t = performance.now();
+  await new Promise((r) => setTimeout(r, 2500));
+  const out = [];
+  for (const p of fresh) {
+    const place = await sim.suggest([p], 'place');
+    const plant = await sim.suggest([p], 'plant');
+    out.push(`${p.fileName.split('_')[2]} → ${s.catalog.places.get(place[0]?.key)?.name} / ${s.varietyName(s.catalog.plants.get(plant[0]?.key) || {})}`);
+  }
+  return out;
+});
+console.log('   голова:', headRes.join('; '));
+await check(headRes.filter((x) => /hydrangea.*Гортенз|peony.*Пион|rose.*Роз|view.*Вид на дом/.test(x)).length >= 3, 'подсказки обученной «головы» верны хотя бы для 3 из 4');
 await check(!(await page.locator('.backup-status').last().innerText()).includes('null'), 'под таблицей нет лишнего «null»');
 
 // Выключение — подсказки по-прежнему работают

@@ -1,5 +1,6 @@
 // Фоновый поток: нейросеть считает отпечатки фото, не мешая интерфейсу.
 import { loadModel, run, toInput } from '../lib/nn.js';
+import { trainHead } from '../lib/head.js';
 
 const MODEL = new URL('../../vendor/mobilenetv2-1.json', import.meta.url);
 const WEIGHTS = new URL('../../vendor/mobilenetv2-1.f16', import.meta.url);
@@ -20,6 +21,16 @@ self.onmessage = async (e) => {
     if (type === 'init') {
       await init();
       self.postMessage({ id, ok: true, size: model.spec.size });
+      return;
+    }
+    if (type === 'train') {
+      // Обучение «головы»: отпечатки приходят одним массивом n×d
+      const { flat, n, d, labels } = e.data;
+      const X = Array.from({ length: n }, (_, i) => flat.subarray(i * d, (i + 1) * d));
+      const t = performance.now();
+      const head = trainHead(X, labels);
+      if (!head) { self.postMessage({ id, ok: true, head: null }); return; }
+      self.postMessage({ id, ok: true, head: { classes: head.classes, A: head.A, counts: head.counts, C: head.C }, ms: performance.now() - t }, [head.A.buffer]);
       return;
     }
     if (type === 'embed') {
