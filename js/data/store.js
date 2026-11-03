@@ -205,7 +205,7 @@ export async function setPhotoTags(id, { placeIds, plantIds }) {
  * @returns снимок для отмены
  */
 export async function deletePhotos(ids) {
-  const snapshot = await tx([STORES.photos, STORES.images, STORES.meta, STORES.features], 'readwrite', async (t) => {
+  const snapshot = await tx([STORES.photos, STORES.images, STORES.meta, STORES.features, STORES.embeddings], 'readwrite', async (t) => {
     const ph = t.objectStore(STORES.photos);
     const im = t.objectStore(STORES.images);
     const meta = t.objectStore(STORES.meta);
@@ -220,6 +220,7 @@ export async function deletePhotos(ids) {
       im.delete(`${id}:t`);
       im.delete(`${id}:f`);
       t.objectStore(STORES.features).delete(id);
+      t.objectStore(STORES.embeddings).delete(id);
     }
     const deleted = new Set((await promisify(meta.get('deletedIds'))) || []);
     ids.forEach((id) => deleted.add(id));

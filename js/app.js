@@ -13,6 +13,7 @@ import { placeTaggingView } from './views/placeTagging.js';
 import { journalView } from './views/journal.js';
 import { statsView } from './views/stats.js';
 import { indexAll } from './data/similarity.js';
+import { nnRun } from './data/nnIndex.js';
 
 const routes = [
   { re: /^\/queue$/, view: queueView, tab: 'queue' },
@@ -157,7 +158,7 @@ async function start() {
 
   bus.addEventListener('import', (e) => {
     updateBanner(e.detail);
-    if (!e.detail.running) setTimeout(() => indexAll().catch(() => {}), 1000);
+    if (!e.detail.running) setTimeout(() => { indexAll().catch(() => {}); nnRun(); }, 1000);
     if (!e.detail.running && currentRoute && ['queue', 'more', 'camera'].includes(currentRoute.tab) && !currentRoute.full) rerender();
     else refreshNav();
   });
@@ -170,6 +171,8 @@ async function start() {
   window.__appStarted = true;
   // Отпечатки для подсказок считаются в фоне, когда приложение уже открылось
   setTimeout(() => indexAll().catch(() => {}), 4000);
+  // Нейросеть (если включена) продолжает изучать фото с того места, где остановилась
+  setTimeout(() => nnRun(), 6000);
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     const hadController = !!navigator.serviceWorker.controller;

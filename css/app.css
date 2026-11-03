@@ -1,3 +1,4 @@
+[hidden] { display: none !important; }
 /* Дневник растений — стили */
 :root {
   --bg: #F4F5EF;
@@ -490,3 +491,9 @@ body.fullscreen-route #view { padding-bottom: 0; }
 .compare .viewer-top .segmented { flex: 1; min-width: 0; }
 .cmp-back { padding: 0 10px 0 6px; }
 .pair-divider { color: #B9C3BB; margin: 6px 2px 0; }
+
+/* Нейросеть в «Помощнике» */
+.nn-box { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.nn-box .btn { align-self: flex-start; }
+.acc-table.two { font-size: 13px; }
+.acc-table .nn-col { background: var(--accent-soft); }

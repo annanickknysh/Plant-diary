@@ -1,7 +1,7 @@
 // Обёртка над IndexedDB. Всё хранится на устройстве.
 
 const DB_NAME = 'plant-diary';
-const VERSION = 2;
+const VERSION = 3;
 let dbPromise = null;
 let current = null;
 
@@ -15,6 +15,7 @@ export const STORES = {
   entries: 'entries',   // записи дневника (этап 3)
   meta: 'meta',         // настройки и служебное
   features: 'features', // отпечатки фото для подсказок: ключ — id фото → {v, f: Float32Array}
+  embeddings: 'embeddings', // отпечатки нейросети: ключ — id фото → {v, e: Float32Array(1280)}
 };
 
 export function openDB() {
@@ -37,6 +38,7 @@ export function openDB() {
           db.createObjectStore(STORES.meta);
         }
         if (ev.oldVersion < 2) db.createObjectStore(STORES.features);
+        if (ev.oldVersion < 3) db.createObjectStore(STORES.embeddings);
       };
       r.onsuccess = () => {
         document.getElementById('blocked-note')?.remove();

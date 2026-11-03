@@ -1,6 +1,7 @@
 // Помощник распознавания: отпечатки фото, фоновый расчёт, подсказки «Похоже на…», проверка точности.
 import { STORES, tx, promisify, getAll } from './db.js';
-import { emit, catalog, photosByStatus, placeWithDescendants } from './store.js';
+import { emit, catalog, photosByStatus, placeWithDescendants, getSetting } from './store.js';
+import { nnVectors, nnEnsure, nnCount } from './nnIndex.js';
 import { computeFeatures, vote, meanFeature, FEATURE_SIZE, FEATURE_VERSION } from '../lib/features.js';
 
 const cache = new Map(); // id фото → Float32Array
@@ -106,10 +107,11 @@ export function forget(id) {
   cache.delete(id);
 }
 
-/** Размеченные фото с отпечатками: [{id, f, takenAt, places[], plants[]}] */
-async function labeledSet(excludeIds = new Set()) {
+/** Размеченные фото с отпечатками: [{id, f, takenAt, places[], plants[]}]
+ *  nn — брать отпечатки нейросети (только у тех фото, где они уже посчитаны) */
+async function labeledSet(excludeIds = new Set(), { nn = false } = {}) {
   const tagged = (await photosByStatus('tagged')).filter((p) => !excludeIds.has(p.id));
-  const feats = await featuresFor(tagged.map((p) => p.id));
+  const feats = nn ? await nnVectors(tagged.map((p) => p.id)) : await featuresFor(tagged.map((p) => p.id));
   return tagged.filter((p) => feats.has(p.id)).map((p) => ({
     id: p.id,
     f: feats.get(p.id),
@@ -172,7 +174,11 @@ function bedsOfPlants(photos) {
 export async function suggest(photos, mode, { ctxPlace = null } = {}) {
   if (!photos.length) return [];
   const selected = new Set(photos.map((p) => p.id));
-  const labeled = await labeledSet(selected);
+  // Нейросеть — если включена и уже знает достаточно размеченных фото; иначе прежний способ
+  let nn = (await getSetting('nnEnabled')) === true && (await nnCount()) >= MIN_LABELED;
+  if (nn) await nnEnsure([...selected].slice(0, 12));
+  let labeled = await labeledSet(selected, { nn });
+  if (nn && labeled.length < MIN_LABELED) { nn = false; labeled = await labeledSet(selected); }
   const month = new Date(photos[0].takenAt).getMonth();
 
   // Клумба по уже отмеченным растениям — даже без «зрения»
@@ -187,7 +193,8 @@ export async function suggest(photos, mode, { ctxPlace = null } = {}) {
 
   let res = [];
   const enough = labeled.length >= MIN_LABELED;
-  const qf = enough ? await featuresFor([...selected]) : new Map();
+  let qf = enough ? (nn ? await nnVectors([...selected]) : await featuresFor([...selected])) : new Map();
+  if (nn && !qf.size && enough) { labeled = await labeledSet(selected); qf = await featuresFor([...selected]); }
   if (qf.size) {
     const query = meanFeature([...qf.values()]);
     if (mode === 'plant' && ctxPlace) {
@@ -222,12 +229,33 @@ export async function suggest(photos, mode, { ctxPlace = null } = {}) {
  * без фото той же прогулки (±2 часа), чтобы почти одинаковые кадры не завышали результат.
  */
 export async function evaluate({ sample = 250, onProgress } = {}) {
-  const all = await labeledSet();
-  const pick = all.length > sample ? [...all].sort(() => Math.random() - 0.5).slice(0, sample) : all;
-  const res = { place: { n: 0, top1: 0, top3: 0 }, plant: { n: 0, top1: 0, top3: 0 }, plantInBed: { n: 0, top1: 0, top3: 0 }, total: all.length };
+  const classic = await labeledSet();
+  const nnOn = (await getSetting('nnEnabled')) === true;
+  const nnAll = nnOn ? await labeledSet(new Set(), { nn: true }) : [];
+  // Для честного сравнения обе модели проверяются на одних и тех же фото
+  const nnIds = new Set(nnAll.map((x) => x.id));
+  const base = nnAll.length >= MIN_LABELED ? classic.filter((x) => nnIds.has(x.id)) : classic;
+  const pick = base.length > sample ? [...base].sort(() => Math.random() - 0.5).slice(0, sample) : base;
+  const steps = pick.length * (nnAll.length >= MIN_LABELED ? 2 : 1);
+  let done = 0;
+  const tick = async () => {
+    onProgress?.(++done, steps);
+    if (done % 20 === 0) await new Promise((r) => setTimeout(r, 0));
+  };
+  const out = await evalOn(classic, pick.map((p) => p.id), tick);
+  out.total = classic.length;
+  if (nnAll.length >= MIN_LABELED) out.nn = await evalOn(nnAll, pick.map((p) => p.id), tick);
+  out.nnCount = nnAll.length;
+  return out;
+}
+
+async function evalOn(all, pickIds, tick) {
+  const byId = new Map(all.map((x) => [x.id, x]));
+  const res = { place: { n: 0, top1: 0, top3: 0 }, plant: { n: 0, top1: 0, top3: 0 }, plantInBed: { n: 0, top1: 0, top3: 0 } };
   const near = 2 * 3600 * 1000;
-  let i = 0;
-  for (const q of pick) {
+  for (const id of pickIds) {
+    const q = byId.get(id);
+    if (!q) { await tick(); continue; }
     const others = all.filter((o) => Math.abs(o.takenAt - q.takenAt) > near);
     for (const mode of ['place', 'plant']) {
       const truth = new Set(mode === 'place' ? q.places : q.plants);
@@ -241,7 +269,7 @@ export async function evaluate({ sample = 250, onProgress } = {}) {
       if (top.some((l) => truth.has(l))) r.top3++;
     }
     // Растение, когда клумба уже выбрана: ищем только среди растений этой клумбы
-    const bed = q.places.find((id) => catalog.places.get(id)?.kind !== 'view' && q.plants.some((pid) => catalog.plants.get(pid)?.placeId === id));
+    const bed = q.places.find((pid) => catalog.places.get(pid)?.kind !== 'view' && q.plants.some((x) => catalog.plants.get(x)?.placeId === pid));
     if (bed) {
       const top = (plantVoteInBed(q.f, new Date(q.takenAt).getMonth(), others, bed) || []).slice(0, 3).map((x) => x.key);
       const truth = new Set(q.plants);
@@ -250,8 +278,7 @@ export async function evaluate({ sample = 250, onProgress } = {}) {
       if (top[0] && truth.has(top[0])) r.top1++;
       if (top.some((l) => truth.has(l))) r.top3++;
     }
-    onProgress?.(++i, pick.length);
-    if (i % 20 === 0) await new Promise((r) => setTimeout(r, 0));
+    await tick();
   }
   return res;
 }
