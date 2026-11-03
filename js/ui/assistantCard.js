@@ -73,7 +73,7 @@ export async function assistantCard() {
           ? [h('tr', null, h('th', null, ''), h('th', { colspan: 2 }, 'Прежний'), h('th', { colspan: 2, class: 'nn-col' }, 'Нейросеть'), h('th', null, '')),
             h('tr', null, h('th', null, ''), h('th', null, '1-я'), h('th', null, 'из 3'), h('th', { class: 'nn-col' }, '1-я'), h('th', { class: 'nn-col' }, 'из 3'), h('th', null, 'фото'))]
           : [h('tr', null, h('th', null, ''), h('th', null, 'с первого раза'), h('th', null, 'среди 3 подсказок'), h('th', null, 'фото'))];
-        clear(result).append(
+        clear(result).append(...[
           h('p', null, r.nn
             ? 'Обе модели по очереди угадывали одни и те же ваши размеченные фото по остальным (без кадров той же прогулки).'
             : 'Помощник по очереди угадывал ваши размеченные фото по остальным (без кадров той же прогулки).'),
@@ -81,7 +81,8 @@ export async function assistantCard() {
             h('thead', null, head),
             h('tbody', null, row('Клумба или вид', 'place'), row('Растение', 'plant'), row('Растение, когда клумба уже выбрана', 'plantInBed'))),
           r.nn ? null : (nnToggle.checked ? h('p', { class: 'muted small' }, `Нейросеть пока изучила ${formatNumber(r.nnCount)} размеченных фото — сравнение появится, когда их будет хотя бы ${MIN_LABELED}.`) : null),
-          h('p', { class: 'muted small' }, '«1-я» — верная подсказка стоит первой, «из 3» — она среди трёх. Подсказки всё равно нужно подтверждать — это помощь, а не автоматическая разметка.'));
+          h('p', { class: 'muted small' }, '«1-я» — верная подсказка стоит первой, «из 3» — она среди трёх. Подсказки всё равно нужно подтверждать — это помощь, а не автоматическая разметка.'),
+        ].filter(Boolean));
       } catch (e) {
         clear(result).append(h('p', { class: 'form-error' }, e.message || String(e)));
       }

@@ -95,6 +95,7 @@ console.log('  ', rows.join('\n   '));
 await page.locator('.acc-table.two').scrollIntoViewIfNeeded();
 await page.screenshot({ path: `${SHOTS}-accuracy.png` });
 await check(rows.length === 3, 'таблица «Прежний / Нейросеть»');
+await check(!(await page.locator('.backup-status').last().innerText()).includes('null'), 'под таблицей нет лишнего «null»');
 
 // Выключение — подсказки по-прежнему работают
 await page.locator('#nn-on').uncheck();

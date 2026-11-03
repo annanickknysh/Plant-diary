@@ -2,6 +2,18 @@
 import { imageURL } from '../data/images.js';
 
 /** h('div', {class: 'x', onClick: fn}, 'текст', child) */
+// Страховка: встроенный append печатает null/undefined как текст «null». В приложении пустой элемент
+// значит «ничего не показывать», поэтому такие значения просто пропускаем — во всех местах сразу.
+for (const proto of [Element.prototype, DocumentFragment.prototype]) {
+  for (const m of ['append', 'prepend', 'replaceChildren']) {
+    const native = proto[m];
+    if (native.__safe) continue;
+    const safe = function (...nodes) { return native.apply(this, nodes.filter((n) => n !== null && n !== undefined && n !== false)); };
+    safe.__safe = true;
+    proto[m] = safe;
+  }
+}
+
 export function h(tag, props, ...children) {
   const el = document.createElement(tag);
   if (props) {
