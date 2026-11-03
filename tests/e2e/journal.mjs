@@ -95,6 +95,28 @@ await A.waitForTimeout(200);
 await check(A, (await A.locator('.sheet-overlay .place-browser').innerText()).includes('Вид на дом') === false, 'во вкладке «Место» видов нет');
 await A.keyboard.press('Escape');
 
+// Клумба → растения этой клумбы; сорт из другой клумбы — новым экземпляром здесь
+await A.evaluate(async () => {
+  const s = await import('/js/data/store.js');
+  const bed = await s.createPlace({ name: 'Розарий' });
+  const sp = await s.createSpecies({ name: 'Роза' });
+  await s.createPlant({ speciesId: sp.id, placeId: bed.id });
+});
+await A.getByRole('button', { name: 'Сменить' }).click();
+await A.locator('.sheet-overlay .segmented button').first().waitFor();
+await A.locator('.sheet-overlay .segmented').getByRole('button', { name: 'Место', exact: true }).click();
+await A.locator('.sheet-overlay .pick-row', { hasText: 'Розарий' }).first().click();
+await A.getByRole('button', { name: 'Растения «Розарий» →' }).click();
+await A.waitForTimeout(200);
+const plantTab = await A.locator('.sheet-overlay .tag-lists').innerText();
+await shot(A, 'what-bed-plants');
+await check(A, /Растут в «Розарий»[\s\S]*Роза/i.test(plantTab) && plantTab.includes('добавится в «Розарий»'), 'растения клумбы сверху, сорта из других клумб — «добавится»');
+await A.locator('.sheet-overlay .pick-row', { hasText: 'Хоста «June»' }).first().click();
+await A.getByRole('button', { name: 'Выбрать', exact: true }).click();
+await A.waitForTimeout(500);
+const tgt = await A.locator('.target-row .list-title').textContent();
+await check(A, tgt.includes('Хоста «June» — Розарий'), `снимаем новый экземпляр в этой клумбе: ${tgt}`);
+
 // Резервная копия: весь дневник
 await A.goto(`${BASE}#/more`);
 await dismissBanner(A);

@@ -1,6 +1,6 @@
 {
   "name": "plant-diary",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "private": true,
   "type": "module",
   "description": "Дневник растений: фото по годам, сезонам и клумбам",

@@ -62,9 +62,10 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
       if (st.mode === 'view') {
         root.append(viewList());
       } else if (st.mode === 'place') {
+        const bed = split && [...st.picked].find((id) => catalog.places.get(id)?.kind !== 'view');
         root.append(...[suggestionSection(), ...placeNear()].filter(Boolean), placeBrowser({
           isSelected: (id) => st.picked.has(id), onSelect: toggle, recentIds: recentPlaces, gpsCenter: center, state: st.browser, noViews: split,
-        }));
+        }), bed ? h('button', { class: 'btn block ctx-go', type: 'button', onClick: () => switchMode('plant') }, `Растения «${catalog.places.get(bed).name}» →`) : null);
       } else if (st.creating) {
         root.append(plantForm());
         return;
@@ -104,6 +105,11 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
 
     const switchMode = (m) => {
       if (st.mode === m) return;
+      // «Что снимаем»: клумба, выбранная на вкладке «Место», становится клумбой для выбора растений
+      if (split && st.mode === 'place' && m === 'plant') {
+        const bed = [...st.picked].find((id) => catalog.places.get(id)?.kind !== 'view');
+        if (bed) ctxPlace = bed;
+      }
       st.mode = m;
       st.picked.clear();
       st.query = '';
@@ -236,6 +242,10 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
       const plants = [...catalog.plants.values()];
       const out = [];
       const ctxName = catalog.places.get(ctxPlace).name;
+      if (split) {
+        out.push(h('div', { class: 'chips-row ctx-bed' }, h('span', { class: 'muted small' }, `Клумба: ${placePath(ctxPlace)}`),
+          h('button', { class: 'pill', type: 'button', onClick: () => { ctxPlace = null; st.picked.clear(); draw(); } }, icon('close', 14), 'Все растения')));
+      }
       if (ctxCandidates.length > 1) {
         out.push(h('div', { class: 'chips-row' }, h('span', { class: 'muted small' }, 'Клумба:'),
           ctxCandidates.map((id) => h('button', { class: 'pill', type: 'button', 'aria-pressed': String(id === ctxPlace), onClick: () => { ctxPlace = id; st.picked.clear(); draw(); } }, catalog.places.get(id).name))));
