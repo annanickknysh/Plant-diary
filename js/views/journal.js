@@ -27,8 +27,14 @@ export async function journalView(kind, id) {
 
   // ---------- съёмка ----------
   const chooseTarget = () => openTagSheet({
-    photos: [], mode: target?.plantIds?.length ? 'plant' : 'place', title: 'Что снимаем', cta: 'Выбрать',
-    onApply: async (sel) => { target = sel; rerender(); },
+    photos: [], split: true, title: 'Что снимаем', cta: 'Выбрать',
+    mode: target?.plantIds?.length ? 'plant' : target?.placeId && catalog.places.get(target.placeId)?.kind === 'view' ? 'view' : target?.placeId ? 'place' : 'plant',
+    // Адрес экрана помнит цель (#/camera/plant/…) — меняем и его, иначе выбор перебьётся при перерисовке
+    onApply: async (sel) => {
+      target = sel;
+      const next = sel.plantIds?.length === 1 ? `#/camera/plant/${sel.plantIds[0]}` : sel.placeId ? `#/camera/place/${sel.placeId}` : '#/camera';
+      if (location.hash !== next && (sel.plantIds?.length <= 1)) location.hash = next; else rerender();
+    },
   });
 
   const shoot = h('section', { class: 'card' }, h('h2', { class: 'card-title' }, 'Съёмка'));

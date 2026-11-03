@@ -1,7 +1,7 @@
 // Нижняя панель «Отметить фото»: клумба (одна) или растения (несколько).
 import { h, icon, clear, openSheet } from '../ui/dom.js';
 import {
-  catalog, plantName, placePath, parentPath, getSetting, createSpecies, createCultivar, createPlant, varietyName,
+  catalog, plantName, placePath, parentPath, getSetting, createSpecies, createCultivar, createPlant, createPlace, varietyName,
 } from '../data/store.js';
 import { centerOf, distanceMeters } from '../lib/geo.js';
 import { formatNumber, plural, PHOTO_FORMS } from '../lib/format.js';
@@ -13,7 +13,10 @@ const norm = (s) => (s || '').toLowerCase().replace(/ё/g, 'е').trim();
 /**
  * @param {{photos: Array, mode: 'place'|'plant', onApply: ({placeId, plantIds}) => Promise}} opts
  */
-export async function openTagSheet({ photos, mode: initialMode = 'place', onApply, startLevel = null, title = null, cta = null, singlePlant = false }) {
+/**
+ * @param split — три вкладки «Растение · Место · Вид» (как в каталоге) вместо «Клумба или вид · Растение»
+ */
+export async function openTagSheet({ photos, mode: initialMode = 'place', onApply, startLevel = null, title = null, cta = null, singlePlant = false, split = false }) {
   const recentPlaces = (await getSetting('recentPlaces')).filter((id) => catalog.places.has(id));
   const recentPlants = (await getSetting('recentPlants')).filter((id) => catalog.plants.has(id));
   const center = centerOf(photos);
@@ -49,15 +52,18 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
         h('h2', { class: 'sheet-title' }, title || `Отметить ${formatNumber(n)} ${plural(n, PHOTO_FORMS)}`),
         h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Закрыть', onClick: close }, icon('close'))));
 
-      const seg = h('div', { class: 'segmented', role: 'group', 'aria-label': 'Что отмечаем' },
-        h('button', { type: 'button', 'aria-pressed': String(st.mode === 'place'), onClick: () => switchMode('place') }, 'Клумба или вид'),
-        h('button', { type: 'button', 'aria-pressed': String(st.mode === 'plant'), onClick: () => switchMode('plant') }, 'Растение'));
+      const tab = (m, label) => h('button', { type: 'button', 'aria-pressed': String(st.mode === m), onClick: () => switchMode(m) }, label);
+      const seg = split
+        ? h('div', { class: 'segmented', role: 'group', 'aria-label': 'Что отмечаем' }, tab('plant', 'Растение'), tab('place', 'Место'), tab('view', 'Вид'))
+        : h('div', { class: 'segmented', role: 'group', 'aria-label': 'Что отмечаем' }, tab('place', 'Клумба или вид'), tab('plant', 'Растение'));
       root.append(seg);
 
       loadSuggestions();
-      if (st.mode === 'place') {
+      if (st.mode === 'view') {
+        root.append(viewList());
+      } else if (st.mode === 'place') {
         root.append(...[suggestionSection(), ...placeNear()].filter(Boolean), placeBrowser({
-          isSelected: (id) => st.picked.has(id), onSelect: toggle, recentIds: recentPlaces, gpsCenter: center, state: st.browser,
+          isSelected: (id) => st.picked.has(id), onSelect: toggle, recentIds: recentPlaces, gpsCenter: center, state: st.browser, noViews: split,
         }));
       } else if (st.creating) {
         root.append(plantForm());
@@ -89,9 +95,11 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
             let ids = [...st.picked];
             close();
             if (st.mode === 'plant') ids = await resolvePlants(ids);
-            await onApply(st.mode === 'place' ? { placeId: ids[0], plantIds: [] } : { placeId: null, plantIds: ids });
+            await onApply(st.mode !== 'plant' ? { placeId: ids[0], plantIds: [] } : { placeId: null, plantIds: ids });
           },
-        }, count === 0 ? (st.mode === 'place' ? 'Выберите клумбу или вид' : 'Выберите растения') : cta || `Отметить ${formatNumber(n)} ${plural(n, PHOTO_FORMS)}`)));
+        }, count === 0
+          ? ({ place: split ? 'Выберите место' : 'Выберите клумбу или вид', view: 'Выберите вид', plant: 'Выберите растения' })[st.mode]
+          : cta || `Отметить ${formatNumber(n)} ${plural(n, PHOTO_FORMS)}`)));
     };
 
     const switchMode = (m) => {
@@ -104,8 +112,65 @@ export async function openTagSheet({ photos, mode: initialMode = 'place', onAppl
       draw();
     };
 
+    // ---------- вкладка «Вид»: все виды по зонам, поиск, создание ----------
+    const viewList = () => {
+      const box = h('div', { class: 'tag-lists' });
+      const search = h('input', { type: 'search', placeholder: 'Найти вид', 'aria-label': 'Поиск вида', autocomplete: 'off' });
+      search.value = st.query;
+      const list = h('div');
+      const drawList = () => {
+        clear(list);
+        const q = norm(st.query);
+        const views = [...catalog.places.values()].filter((p) => p.kind === 'view' && (!q || norm(placePath(p.id)).includes(q)))
+          .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+        const groups = new Map();
+        for (const v of views) {
+          const z = v.parentId ? placePath(v.parentId) : 'Без зоны';
+          if (!groups.has(z)) groups.set(z, []);
+          groups.get(z).push(row(v.id, v.name, null));
+        }
+        for (const z of [...groups.keys()].sort((a, b) => a.localeCompare(b, 'ru'))) list.append(section(z, groups.get(z)));
+        if (!views.length) list.append(h('p', { class: 'muted' }, q ? 'Ничего не нашлось.' : 'Видов пока нет — создайте первый.'));
+        list.append(createView(st.query.trim()));
+      };
+      search.addEventListener('input', () => { st.query = search.value; drawList(); });
+      drawList();
+      box.append(h('label', { class: 'search' }, icon('search', 18), search), list);
+      return box;
+    };
+    const createView = (prefill) => {
+      if (!st.creating) {
+        return h('button', { class: 'btn dashed block', type: 'button', onClick: () => { st.creating = true; draw(); } },
+          icon('eye', 20), prefill ? `Создать вид «${prefill[0].toUpperCase()}${prefill.slice(1)}»` : 'Новый вид');
+      }
+      const name = h('input', { type: 'text', autocomplete: 'off', placeholder: 'Например, «Вид на дом»' });
+      name.value = prefill ? `${prefill[0].toUpperCase()}${prefill.slice(1)}` : '';
+      let parentId = null;
+      const zone = placeField({ value: null, title: 'В какой зоне', allowNone: true, onChange: (id) => { parentId = id; } });
+      const err = h('p', { class: 'form-error', role: 'alert' });
+      const form = h('form', { class: 'form create-inline' },
+        h('label', { class: 'field' }, h('span', null, 'Новый вид'), name),
+        h('div', { class: 'field' }, h('span', null, 'В какой зоне'), zone.el),
+        err,
+        h('div', { class: 'row-buttons' },
+          h('button', { class: 'btn', type: 'button', onClick: () => { st.creating = false; draw(); } }, 'Отмена'),
+          h('button', { class: 'btn primary', type: 'submit' }, 'Создать и выбрать')));
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!name.value.trim()) { err.textContent = 'Введите название.'; return; }
+        const v = await createPlace({ name: name.value, parentId, kind: 'view' });
+        st.creating = false;
+        st.query = '';
+        st.picked.clear();
+        st.picked.add(v.id);
+        draw();
+      });
+      setTimeout(() => name.focus(), 30);
+      return form;
+    };
+
     const toggle = (id) => {
-      if (st.mode === 'place' || singlePlant) {
+      if (st.mode === 'place' || st.mode === 'view' || singlePlant) {
         const had = st.picked.has(id);
         st.picked.clear();
         if (!had) st.picked.add(id);

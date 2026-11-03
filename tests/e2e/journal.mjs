@@ -74,6 +74,27 @@ const tagged = await A.evaluate(async (pid) => (await (await import('/js/data/st
 await check(A, tagged === 13, `новый снимок сразу отмечен растением (фото у растения: ${tagged})`);
 await shot(A, 'journal');
 
+// «Что снимаем»: три вкладки, как в каталоге
+await A.getByRole('button', { name: 'Сменить' }).click();
+await A.locator('.sheet-overlay .segmented button').first().waitFor();
+const tabs = await A.locator('.sheet-overlay .segmented button').allTextContents();
+await check(A, tabs.join(',') === 'Растение,Место,Вид', `вкладки: ${tabs.join(', ')}`);
+await A.locator('.sheet-overlay .segmented').getByRole('button', { name: 'Вид', exact: true }).click();
+await A.getByPlaceholder('Найти вид').fill('вид на дом');
+await A.getByRole('button', { name: 'Создать вид «Вид на дом»' }).click();
+await A.getByRole('button', { name: 'Создать и выбрать' }).click();
+await shot(A, 'what-view');
+await A.getByRole('button', { name: 'Выбрать', exact: true }).click();
+await A.waitForTimeout(300);
+await check(A, (await A.locator('.target-row .list-title').textContent()).includes('Вид на дом'), 'выбран новый вид');
+await A.getByRole('button', { name: 'Сменить' }).click();
+await A.locator('.sheet-overlay .segmented button').first().waitFor();
+await check(A, (await A.locator('.sheet-overlay .segmented button[aria-pressed=true]').textContent()) === 'Вид', 'панель открылась на вкладке «Вид»');
+await A.locator('.sheet-overlay .segmented').getByRole('button', { name: 'Место', exact: true }).click();
+await A.waitForTimeout(200);
+await check(A, (await A.locator('.sheet-overlay .place-browser').innerText()).includes('Вид на дом') === false, 'во вкладке «Место» видов нет');
+await A.keyboard.press('Escape');
+
 // Резервная копия: весь дневник
 await A.goto(`${BASE}#/more`);
 await dismissBanner(A);
