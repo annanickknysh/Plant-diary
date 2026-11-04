@@ -175,7 +175,8 @@ export async function importBackup(file, onProgress = () => {}) {
         placeIds: [...new Set([...l.placeIds, ...r.placeIds])],
         plantIds: [...new Set([...l.plantIds, ...r.plantIds])],
       };
-      merged.status = merged.placeIds.length || merged.plantIds.length ? 'tagged' : (l.status === 'hidden' || r.status === 'hidden' ? 'hidden' : 'new');
+      // Свежее решение «в корзину» сохраняется, даже если у фото есть отметки
+      merged.status = newer.status === 'hidden' ? 'hidden' : merged.placeIds.length || merged.plantIds.length ? 'tagged' : (l.status === 'hidden' || r.status === 'hidden' ? 'hidden' : 'new');
       if (JSON.stringify(merged) !== JSON.stringify(l)) {
         await put(STORES.photos, merged);
         report.photosMerged++;

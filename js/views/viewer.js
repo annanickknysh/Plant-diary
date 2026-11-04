@@ -1,7 +1,7 @@
 // Полноэкранный просмотр фото с листанием и отметками.
 import { h, icon, clear, photoImg } from '../ui/dom.js';
 import { formatDate, formatTime } from '../lib/format.js';
-import { catalog, plantName, placePath, setPhotoTags, getPhoto, tagPhotos, deletePhotos, restoreDeletedPhotos } from '../data/store.js';
+import { catalog, plantName, placePath, setPhotoTags, getPhoto, tagPhotos, trashPhotos, untrashPhotos, restorePhotos } from '../data/store.js';
 import { toast, confirmAction } from '../ui/dom.js';
 import { openTagSheet } from './tagSheet.js';
 import { rotatePhoto } from '../data/rotate.js';
@@ -50,13 +50,15 @@ export function openViewer(photos, index, { onChange, actions = [] } = {}) {
       chips.append(h('span', { class: 'chip plant' }, plantName(catalog.plants.get(id)),
         h('button', { class: 'chip-x', type: 'button', 'aria-label': 'Убрать отметку растения', onClick: () => removeTag('plant', id) }, '×')));
     }
-    if (!p.placeIds.length && !p.plantIds.length) chips.append(h('span', { class: 'muted' }, p.status === 'hidden' ? 'Скрыто: «не растение»' : 'Без отметок'));
+    if (!p.placeIds.length && !p.plantIds.length) chips.append(h('span', { class: 'muted' }, p.status === 'hidden' ? 'В корзине' : 'Без отметок'));
     info.append(chips, h('div', { class: 'viewer-actions' },
       h('button', { class: 'btn small', type: 'button', onClick: addTag }, icon('plus', 18), 'Отметить'),
       actions.map((a) => h('button', { class: 'btn small', type: 'button', onClick: () => a.onClick(photos[i]) }, a.label)),
       h('button', { class: 'btn small icon-only', type: 'button', 'aria-label': 'Повернуть против часовой стрелки', onClick: (e) => rotate(-1, e.currentTarget) }, icon('rotl', 18)),
       h('button', { class: 'btn small icon-only', type: 'button', 'aria-label': 'Повернуть по часовой стрелке', onClick: (e) => rotate(1, e.currentTarget) }, icon('rotr', 18)),
-      h('button', { class: 'btn small', type: 'button', onClick: removePhoto }, icon('trash', 16), 'Удалить')));
+      p.status === 'hidden'
+        ? h('button', { class: 'btn small', type: 'button', onClick: removePhoto }, 'Вернуть из корзины')
+        : h('button', { class: 'btn small', type: 'button', onClick: removePhoto }, icon('trash', 16), 'В корзину')));
     if (p.fileName) info.append(h('div', { class: 'viewer-file' }, p.folder ? `${p.folder}/${p.fileName}` : p.fileName));
   };
 
@@ -91,12 +93,20 @@ export function openViewer(photos, index, { onChange, actions = [] } = {}) {
   };
 
   const removePhoto = async () => {
-    if (!confirmAction('Удалить это фото из приложения? Оригинал в галерее или папке останется.')) return;
     const p = photos[i];
-    const snapshot = await deletePhotos([p.id]);
+    // Фото уже в корзине — «Удалить» в просмотре возвращает его оттуда
+    if (p.status === 'hidden') {
+      await untrashPhotos([p.id]);
+      photos[i] = await getPhoto(p.id);
+      onChange?.();
+      toast('Фото вернулось из корзины');
+      drawInfo();
+      return;
+    }
+    const snapshot = await trashPhotos([p.id]);
     photos.splice(i, 1);
     onChange?.();
-    toast('Фото удалено из приложения', { actionLabel: 'Отменить', duration: 10000, onAction: async () => { await restoreDeletedPhotos(snapshot); onChange?.(); } });
+    toast('Фото в корзине', { actionLabel: 'Отменить', duration: 10000, onAction: async () => { await restorePhotos(snapshot); onChange?.(); } });
     if (!photos.length) { close(); return; }
     if (i >= photos.length) i = photos.length - 1;
     draw();
@@ -108,6 +118,9 @@ export function openViewer(photos, index, { onChange, actions = [] } = {}) {
       mode: 'plant',
       onApply: async (sel) => {
         await tagPhotos([photos[i].id], sel);
+        // Разметили фото из корзины — значит, оно нужно: достаём его оттуда
+        if (photos[i].status === 'hidden') await untrashPhotos([photos[i].id]);
+        photos[i] = await getPhoto(photos[i].id);
         onChange?.();
         drawInfo();
       },

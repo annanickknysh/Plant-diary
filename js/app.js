@@ -125,6 +125,8 @@ function updateBanner(st) {
     const parts = [`добавлено ${formatNumber(st.added)}`];
     if (st.duplicates) parts.push(`уже были ${formatNumber(st.duplicates)}`);
     if (st.outOfRange) parts.push(`вне периода ${formatNumber(st.outOfRange)}`);
+    if (st.restored) parts.push(`возвращено удалённых ${formatNumber(st.restored)}`);
+    if (st.notSelected) parts.push(`пропущено (не удалялись) ${formatNumber(st.notSelected)}`);
     if (st.deletedBefore) parts.push(`удалены раньше ${formatNumber(st.deletedBefore)}`);
     if (st.noDate) parts.push(`без даты ${formatNumber(st.noDate)}`);
     if (st.failed.length) parts.push(`не прочитано ${formatNumber(st.failed.length)}`);

@@ -200,7 +200,32 @@ export async function setPhotoTags(id, { placeIds, plantIds }) {
 }
 
 /**
- * Удалить фото из приложения (оригиналы на устройстве не трогаются).
+ * «Удалить» = отправить в корзину: фото пропадает из разбора, сезонов и подсказок, но остаётся в приложении —
+ * его можно посмотреть, вернуть или разметить в «Ещё → Корзина».
+ * @returns снимок для «Отменить» (restorePhotos)
+ */
+export async function trashPhotos(ids) {
+  const before = [];
+  await updatePhotos(ids, (p) => {
+    before.push({ id: p.id, status: p.status, placeIds: [...p.placeIds], plantIds: [...p.plantIds] });
+    p.status = 'hidden';
+    p.trashedAt = Date.now();
+  });
+  emit('photos');
+  return before;
+}
+
+/** Достать из корзины: обратно в разбор (или в размеченные, если отметки есть). */
+export async function untrashPhotos(ids) {
+  await updatePhotos(ids, (p) => {
+    p.status = p.placeIds.length || p.plantIds.length ? 'tagged' : 'new';
+    delete p.trashedAt;
+  });
+  emit('photos');
+}
+
+/**
+ * Удалить фото из приложения навсегда (оригиналы на устройстве не трогаются).
  * Удалённые запоминаются, чтобы повторный импорт той же папки их не вернул.
  * @returns снимок для отмены
  */
@@ -254,6 +279,13 @@ export async function deletedIds() {
 
 export function forgetDeleted() {
   return put(STORES.meta, [], 'deletedIds');
+}
+
+/** Убрать фото из списка навсегда удалённых (их вернули из папки). */
+export async function unforgetDeleted(ids) {
+  const back = new Set(ids);
+  const list = ((await get(STORES.meta, 'deletedIds')) || []).filter((id) => !back.has(id));
+  await put(STORES.meta, list, 'deletedIds');
 }
 
 export async function hidePhotos(ids) {

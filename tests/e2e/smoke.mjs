@@ -110,9 +110,9 @@ if (selCount !== 1) {
   await page.getByRole('button', { name: 'Снять', exact: true }).click();
   await page.locator('.tile').first().click();
 }
-await page.getByRole('button', { name: 'Не растение — удалить из приложения' }).click();
-await page.getByText('Удалено из приложения: 1 фото').waitFor();
-await check(true, 'фото «не растение» удалено из приложения');
+await page.getByRole('button', { name: 'Не растение — в корзину' }).click();
+await page.getByText('В корзине: 1 фото').waitFor();
+await check(true, 'фото «не растение» отправлено в корзину');
 
 // Дерево мест: зона → клумба внутри неё
 await page.goto(`${BASE}#/queue`);
@@ -270,12 +270,18 @@ await shot('place');
 
 // Ещё
 await page.goto(`${BASE}#/more`);
-await page.getByText('Скрыто («не растение»)').waitFor();
-await check(await page.getByText(/Удалено из приложения: 1 фото/).isVisible(), 'в «Ещё» видно число удалённых');
+await page.getByRole('link', { name: 'Корзина (1)' }).waitFor();
+await check(true, 'в «Ещё» видна корзина с 1 фото');
 await shot('more');
 
-// Повторный импорт: удалённое фото не возвращается
-await page.getByRole('button', { name: 'Скрыть' }).click();
+// Из корзины — навсегда; повторный импорт его не возвращает
+page.once('dialog', (d) => d.accept());
+await page.getByRole('link', { name: 'Корзина (1)' }).click();
+await page.locator('.tile').first().click();
+await page.getByRole('button', { name: 'Удалить навсегда' }).click();
+await page.getByText('Удалено навсегда: 1 фото').waitFor();
+await page.goto(`${BASE}#/more`);
+await page.getByRole('button', { name: 'Скрыть' }).click().catch(() => {});
 await page.locator('input[type=file]').first().setInputFiles(files);
 await page.getByText('Импорт завершён').waitFor({ timeout: 60000 });
 const report2 = await page.locator('#import-banner p').textContent();

@@ -1,7 +1,7 @@
 // Экран прогулки: выбор фото и пакетная отметка.
 import { h, icon, photoImg, toast, formSheet } from '../ui/dom.js';
 import {
-  photosByStatus, getSetting, tagPhotos, deletePhotos, restoreDeletedPhotos, restorePhotos, shiftPhotoDates,
+  photosByStatus, getSetting, tagPhotos, trashPhotos, restorePhotos, shiftPhotoDates,
 } from '../data/store.js';
 import { groupWalks } from '../lib/walks.js';
 import { centerOf, distanceMeters } from '../lib/geo.js';
@@ -115,14 +115,14 @@ export async function walkView(routeId) {
     class: 'btn ghost block', type: 'button',
     onClick: async () => {
       const chosen = [...sel];
-      const snapshot = await deletePhotos(chosen);
+      const snapshot = await trashPhotos(chosen);
       sel.clear();
-      toast(`Удалено из приложения: ${formatNumber(chosen.length)} ${plural(chosen.length, PHOTO_FORMS)}`, {
-        actionLabel: 'Отменить', duration: 10000, onAction: async () => { await restoreDeletedPhotos(snapshot); chosen.forEach((id) => sel.add(id)); rerender(); },
+      toast(`В корзине: ${formatNumber(chosen.length)} ${plural(chosen.length, PHOTO_FORMS)}`, {
+        actionLabel: 'Отменить', duration: 10000, onAction: async () => { await restorePhotos(snapshot); chosen.forEach((id) => sel.add(id)); rerender(); },
       });
       rerender();
     },
-  }, icon('trash', 18), 'Не растение — удалить из приложения');
+  }, icon('trash', 18), 'Не растение — в корзину');
   footerButtons.push(bedBtn, plantBtn, hideBtn);
   page.append(h('footer', { class: 'action-bar' }, h('div', { class: 'two-col' }, bedBtn, plantBtn), hideBtn));
   refresh();

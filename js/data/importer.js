@@ -3,7 +3,7 @@
 import { parseExif, parseExifContainer, dateFromFileName } from '../lib/exif.js';
 import { makeResized, saveImages, THUMB_SIZE, FULL_SIZE } from './images.js';
 import { STORES, get, put } from './db.js';
-import { emit, getSetting, deletedIds, tagPhotos } from './store.js';
+import { emit, getSetting, deletedIds, tagPhotos, unforgetDeleted } from './store.js';
 
 const IMAGE_EXT = /\.(jpe?g|png|webp|heic|heif|avif)$/i;
 
@@ -18,6 +18,7 @@ export const importState = {
   skipped: 0, // не изображения
   deletedBefore: 0, // удалены из приложения раньше
   outOfRange: 0, // не попали в выбранный период
+  notSelected: 0, // не из удалённых раньше (режим «вернуть удалённые»)
   startedAt: 0,
   finishedAt: 0,
 };
@@ -57,16 +58,17 @@ export function isImageFile(f) {
  * Добавить файлы в очередь импорта. Можно вызывать, пока идёт предыдущий импорт.
  * @param opts.tag — сразу отметить фото: {placeId, plantIds} (съёмка из приложения)
  * @param opts.range — импортировать только снятые в период {from, to} (мс, to — не включая)
+ * @param opts.onlyDeleted — вернуть только фото, удалённые из приложения раньше; остальные пропустить
  */
-export function importFiles(fileList, { tag = null, range = null } = {}) {
+export function importFiles(fileList, { tag = null, range = null, onlyDeleted = false } = {}) {
   const files = [...fileList];
   const images = files.filter(isImageFile);
   if (!importState.running) {
-    Object.assign(importState, { total: 0, processed: 0, added: 0, duplicates: 0, noDate: 0, failed: [], skipped: 0, deletedBefore: 0, outOfRange: 0, startedAt: Date.now(), finishedAt: 0 });
+    Object.assign(importState, { total: 0, processed: 0, added: 0, duplicates: 0, noDate: 0, failed: [], skipped: 0, deletedBefore: 0, outOfRange: 0, notSelected: 0, restored: 0, startedAt: Date.now(), finishedAt: 0 });
   }
   importState.skipped += files.length - images.length;
   importState.total += images.length;
-  queue.push(...images.map((file) => ({ file, tag, range })));
+  queue.push(...images.map((file) => ({ file, tag, range, onlyDeleted })));
   if (!importState.running) run();
   else progress(true);
 }
@@ -78,9 +80,9 @@ async function run({ workers = 2 } = {}) {
   const quality = (await getSetting('fullQuality')) === 'economy' ? { size: 1200, q: 0.78 } : { size: FULL_SIZE, q: 0.82 };
   const worker = async () => {
     while (queue.length) {
-      const { file, tag, range } = queue.shift();
+      const { file, tag, range, onlyDeleted } = queue.shift();
       try {
-        const id = await importOne(file, quality, deleted, range);
+        const id = await importOne(file, quality, deleted, range, onlyDeleted);
         if (id && tag) await tagPhotos([id], tag);
       } catch (e) {
         console.warn('Импорт', file.name, e);
@@ -129,7 +131,7 @@ async function hashFile(file) {
 // Файл, изменённый раньше начала периода, не мог быть снят в этот период (копия всегда новее снимка).
 const DAY = 24 * 3600 * 1000;
 
-async function importOne(file, quality, deleted, range = null) {
+async function importOne(file, quality, deleted, range = null, onlyDeleted = false) {
   let exif = null;
   if (range) {
     // Дата в имени файла — самая дешёвая проверка; дату изменения файла смотрим, только если её нет
@@ -141,7 +143,9 @@ async function importOne(file, quality, deleted, range = null) {
     if (t && (t < range.from || t >= range.to)) { importState.outOfRange++; return null; }
   }
   const id = await hashFile(file);
-  if (deleted.has(id)) {
+  if (onlyDeleted) {
+    if (!deleted.has(id)) { importState.notSelected++; return null; }
+  } else if (deleted.has(id)) {
     importState.deletedBefore++;
     return null;
   }
@@ -177,5 +181,10 @@ async function importOne(file, quality, deleted, range = null) {
     plantIds: [],
   });
   importState.added++;
+  if (onlyDeleted) {
+    deleted.delete(id);
+    await unforgetDeleted([id]);
+    importState.restored++;
+  }
   return id;
 }
